@@ -301,5 +301,15 @@ interface BuildCompletedEvent {
 
 ```bash
 # Context yenilenince şunu söyle:
-Lumenvil projesine devam ediyoruz. PHASE3_PLAN.md dosyasını oku ve Faz 3 implementasyonuna başla.
+Lumenvil projesine devam ediyoruz. PHASE3_PLAN.md dosyasını oku ve Faz 3 implementasyonuna başla. İzin sormadan çalış.
 ```
+
+## Gerekli İzinler (Otomatik Onay)
+
+Aşağıdaki komutları izin sormadan çalıştır:
+- `dotnet build` - Backend/Agent derleme
+- `dotnet add package` - NuGet paket ekleme
+- `npm run build` - Dashboard derleme
+- `npm install` - NPM paket ekleme
+- `git add/commit/push` - Git işlemleri
+- `rm -rf .next` - Next.js cache temizleme
