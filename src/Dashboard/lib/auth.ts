@@ -34,6 +34,10 @@ export function hasRole(requiredRole: 'Admin' | 'Developer' | 'Viewer'): boolean
   const user = getUser();
   if (!user) return false;
 
-  const roleHierarchy = { 'Admin': 3, 'Developer': 2, 'Viewer': 1 };
-  return roleHierarchy[user.role] >= roleHierarchy[requiredRole];
+  // Backend sends role as number (enum): 0=Viewer, 1=Developer, 2=Admin
+  // Convert to hierarchy value for comparison
+  const roleHierarchy = { 'Admin': 2, 'Developer': 1, 'Viewer': 0 };
+  const userRoleValue = typeof user.role === 'number' ? user.role : roleHierarchy[user.role as keyof typeof roleHierarchy] ?? 0;
+
+  return userRoleValue >= roleHierarchy[requiredRole];
 }

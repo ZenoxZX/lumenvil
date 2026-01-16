@@ -28,9 +28,12 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState(getUser());
+  const [user, setUser] = useState<ReturnType<typeof getUser>>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+
     if (!isAuthenticated()) {
       router.push('/login');
       return;
@@ -49,8 +52,12 @@ export default function DashboardLayout({
     router.push('/login');
   };
 
-  if (!user) {
-    return null;
+  if (!mounted || !user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -64,7 +71,9 @@ export default function DashboardLayout({
 
         <nav className="flex-1 px-4 space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const isActive = item.href === '/dashboard'
+              ? pathname === '/dashboard'
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.name}
@@ -90,7 +99,9 @@ export default function DashboardLayout({
             </div>
             <div>
               <p className="text-sm font-medium">{user.username}</p>
-              <p className="text-xs text-muted-foreground">{user.role}</p>
+              <p className="text-xs text-muted-foreground">
+                {typeof user.role === 'number' ? ['Viewer', 'Developer', 'Admin'][user.role] : user.role}
+              </p>
             </div>
           </div>
           <Button

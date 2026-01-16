@@ -20,7 +20,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  role: UserRole;
+  role: UserRole | number;  // Backend sends as number (0=Viewer, 1=Developer, 2=Admin)
   createdAt: string;
   lastLoginAt?: string;
 }
