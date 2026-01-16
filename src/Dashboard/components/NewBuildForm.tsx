@@ -27,9 +27,10 @@ import { RefreshCw } from 'lucide-react';
 
 interface NewBuildFormProps {
   projectId?: string;
+  onBuildCreated?: () => void;
 }
 
-export function NewBuildForm({ projectId }: NewBuildFormProps) {
+export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -126,6 +127,7 @@ export function NewBuildForm({ projectId }: NewBuildFormProps) {
         title: 'Build Started',
         description: `Build #${build.buildNumber} has been queued`,
       });
+      onBuildCreated?.();
       router.push(`/dashboard/builds/${build.id}`);
     } catch (error) {
       toast({

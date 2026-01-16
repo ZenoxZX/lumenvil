@@ -1,23 +1,72 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BuildDetail } from '@/types';
+import { BuildDetail, BuildLog, BuildStatus } from '@/types';
 import { getBuild, cancelBuild } from '@/lib/api';
-import { formatDate, formatDuration, formatSize } from '@/lib/utils';
-import { BuildProgress } from '@/components/BuildProgress';
+import { formatDate, formatSize } from '@/lib/utils';
+import { BuildProgressBar } from '@/components/BuildProgressBar';
+import { BuildLogViewer } from '@/components/BuildLogViewer';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { ArrowLeft, XCircle } from 'lucide-react';
+import {
+  useBuildGroup,
+  useBuildStatusUpdated,
+  useBuildLogAdded,
+  useBuildCompleted,
+  useBuildProgress,
+  BuildProgressEvent,
+} from '@/lib/useSignalR';
+import { ArrowLeft, XCircle, Clock } from 'lucide-react';
+
+function LiveDuration({ startedAt, completedAt }: { startedAt?: string; completedAt?: string }) {
+  const [elapsed, setElapsed] = useState('');
+
+  useEffect(() => {
+    if (!startedAt) {
+      setElapsed('-');
+      return;
+    }
+
+    const start = new Date(startedAt).getTime();
+    const end = completedAt ? new Date(completedAt).getTime() : null;
+
+    if (end) {
+      const diff = end - start;
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setElapsed(`${minutes}m ${seconds}s`);
+      return;
+    }
+
+    const updateElapsed = () => {
+      const now = Date.now();
+      const diff = now - start;
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setElapsed(`${minutes}m ${seconds}s`);
+    };
+
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt, completedAt]);
+
+  return (
+    <span className="font-medium flex items-center gap-1">
+      {!completedAt && startedAt && <Clock className="w-4 h-4 animate-pulse text-blue-400" />}
+      {elapsed}
+    </span>
+  );
+}
 
 export default function BuildDetailPage() {
   const params = useParams();
@@ -26,14 +75,68 @@ export default function BuildDetailPage() {
   const [buildDetail, setBuildDetail] = useState<BuildDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [logs, setLogs] = useState<BuildLog[]>([]);
+  const [status, setStatus] = useState<BuildStatus | null>(null);
+  const [progress, setProgress] = useState<BuildProgressEvent | null>(null);
 
   const buildId = params.id as string;
+
+  // Join SignalR group for this build
+  useBuildGroup(buildId);
+
+  // Listen for real-time updates
+  useBuildStatusUpdated((event) => {
+    if (event.buildId === buildId) {
+      setStatus(event.status);
+      if (event.errorMessage) {
+        setBuildDetail((prev) =>
+          prev
+            ? { ...prev, build: { ...prev.build, status: event.status, errorMessage: event.errorMessage } }
+            : null
+        );
+      }
+    }
+  }, [buildId]);
+
+  useBuildLogAdded((event) => {
+    if (event.buildId === buildId) {
+      setLogs((prev) => [...prev, event.log]);
+    }
+  }, [buildId]);
+
+  useBuildCompleted((event) => {
+    if (event.buildId === buildId) {
+      setStatus(event.success ? 'Success' : 'Failed');
+      setBuildDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              build: {
+                ...prev.build,
+                status: event.success ? 'Success' : 'Failed',
+                outputPath: event.outputPath,
+                buildSize: event.buildSize,
+                completedAt: new Date().toISOString(),
+              },
+            }
+          : null
+      );
+    }
+  }, [buildId]);
+
+  useBuildProgress((event) => {
+    if (event.buildId === buildId) {
+      setProgress(event);
+    }
+  }, [buildId]);
 
   useEffect(() => {
     const fetchBuild = async () => {
       try {
         const data = await getBuild(buildId);
         setBuildDetail(data);
+        setLogs(data.logs);
+        setStatus(data.build.status);
       } catch (error) {
         console.error('Failed to fetch build:', error);
         toast({
@@ -57,9 +160,9 @@ export default function BuildDetailPage() {
         title: 'Build Cancelled',
         description: 'The build has been cancelled',
       });
-      // Refresh build data
       const data = await getBuild(buildId);
       setBuildDetail(data);
+      setStatus(data.build.status);
     } catch (error) {
       toast({
         title: 'Error',
@@ -70,6 +173,11 @@ export default function BuildDetailPage() {
       setCancelling(false);
     }
   };
+
+  const currentStatus = status || buildDetail?.build.status;
+  const isRunning = currentStatus
+    ? ['Queued', 'Cloning', 'Building', 'Packaging', 'Uploading'].includes(currentStatus)
+    : false;
 
   if (loading) {
     return (
@@ -93,10 +201,7 @@ export default function BuildDetailPage() {
     );
   }
 
-  const { build, logs } = buildDetail;
-  const isRunning = ['Queued', 'Cloning', 'Building', 'Packaging', 'Uploading'].includes(
-    build.status
-  );
+  const { build } = buildDetail;
 
   return (
     <div className="space-y-6">
@@ -129,6 +234,29 @@ export default function BuildDetailPage() {
         )}
       </div>
 
+      {/* Build Progress Bar */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Build Progress</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BuildProgressBar status={currentStatus || 'Queued'} />
+          {progress && isRunning && (
+            <div className="mt-4 p-3 bg-zinc-900 rounded-lg">
+              <p className="text-sm text-zinc-400">{progress.message}</p>
+              {progress.progress > 0 && (
+                <div className="mt-2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${progress.progress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Build Info */}
       <Card>
         <CardHeader>
@@ -140,9 +268,9 @@ export default function BuildDetailPage() {
               <p className="text-sm text-muted-foreground">Status</p>
               <Badge
                 variant={
-                  build.status === 'Success'
+                  currentStatus === 'Success'
                     ? 'success'
-                    : build.status === 'Failed'
+                    : currentStatus === 'Failed'
                     ? 'destructive'
                     : isRunning
                     ? 'info'
@@ -150,7 +278,7 @@ export default function BuildDetailPage() {
                 }
                 className="mt-1"
               >
-                {build.status}
+                {currentStatus}
               </Badge>
             </div>
             <div>
@@ -159,11 +287,10 @@ export default function BuildDetailPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Duration</p>
-              <p className="font-medium">
-                {build.startedAt
-                  ? formatDuration(build.startedAt, build.completedAt)
-                  : '-'}
-              </p>
+              <LiveDuration
+                startedAt={build.startedAt}
+                completedAt={currentStatus === 'Success' || currentStatus === 'Failed' ? build.completedAt : undefined}
+              />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Triggered By</p>
@@ -205,8 +332,15 @@ export default function BuildDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Build Progress & Logs */}
-      <BuildProgress buildId={buildId} initialStatus={build.status} initialLogs={logs} />
+      {/* Build Logs */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Build Logs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BuildLogViewer logs={logs} maxHeight="500px" />
+        </CardContent>
+      </Card>
     </div>
   );
 }

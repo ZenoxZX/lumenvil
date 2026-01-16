@@ -14,6 +14,8 @@ import {
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BuildNotifications } from '@/components/BuildNotifications';
+import { Toaster } from '@/components/ui/toaster';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -120,6 +122,10 @@ export default function DashboardLayout({
       <div className="flex-1 overflow-auto">
         <div className="p-8">{children}</div>
       </div>
+
+      {/* Toast Notifications */}
+      <BuildNotifications />
+      <Toaster />
     </div>
   );
 }

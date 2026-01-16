@@ -14,7 +14,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { onBuildStatusUpdated, onBuildCompleted } from '@/lib/signalr';
+import {
+  useBuildStatusUpdated,
+  useBuildCompleted,
+  useBuildProgress,
+  BuildProgressEvent,
+} from '@/lib/useSignalR';
+import { Loader2 } from 'lucide-react';
 
 const statusVariants: Record<BuildStatus, 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info'> = {
   Queued: 'secondary',
@@ -27,6 +33,8 @@ const statusVariants: Record<BuildStatus, 'default' | 'secondary' | 'destructive
   Cancelled: 'warning',
 };
 
+const runningStatuses: BuildStatus[] = ['Queued', 'Cloning', 'Building', 'Packaging', 'Uploading'];
+
 interface BuildListProps {
   projectId?: string;
   limit?: number;
@@ -37,6 +45,7 @@ export function BuildList({ projectId, limit }: BuildListProps) {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [progressMap, setProgressMap] = useState<Record<string, BuildProgressEvent>>({});
 
   const fetchBuilds = async () => {
     try {
@@ -54,37 +63,44 @@ export function BuildList({ projectId, limit }: BuildListProps) {
     fetchBuilds();
   }, [projectId, page]);
 
-  useEffect(() => {
-    const unsubStatus = onBuildStatusUpdated((event) => {
-      setBuilds((prev) =>
-        prev.map((build) =>
-          build.id === event.buildId
-            ? { ...build, status: event.status, errorMessage: event.errorMessage }
-            : build
-        )
-      );
-    });
+  useBuildStatusUpdated((event) => {
+    setBuilds((prev) =>
+      prev.map((build) =>
+        build.id === event.buildId
+          ? { ...build, status: event.status, errorMessage: event.errorMessage }
+          : build
+      )
+    );
+  });
 
-    const unsubCompleted = onBuildCompleted((event) => {
-      setBuilds((prev) =>
-        prev.map((build) =>
-          build.id === event.buildId
-            ? {
-                ...build,
-                status: event.success ? 'Success' : 'Failed',
-                outputPath: event.outputPath,
-                buildSize: event.buildSize,
-              }
-            : build
-        )
-      );
+  useBuildCompleted((event) => {
+    setBuilds((prev) =>
+      prev.map((build) =>
+        build.id === event.buildId
+          ? {
+              ...build,
+              status: event.success ? 'Success' : 'Failed',
+              outputPath: event.outputPath,
+              buildSize: event.buildSize,
+              completedAt: new Date().toISOString(),
+            }
+          : build
+      )
+    );
+    // Clear progress for completed build
+    setProgressMap((prev) => {
+      const next = { ...prev };
+      delete next[event.buildId];
+      return next;
     });
+  });
 
-    return () => {
-      unsubStatus();
-      unsubCompleted();
-    };
-  }, []);
+  useBuildProgress((event) => {
+    setProgressMap((prev) => ({
+      ...prev,
+      [event.buildId]: event,
+    }));
+  });
 
   if (loading) {
     return (
@@ -114,39 +130,67 @@ export function BuildList({ projectId, limit }: BuildListProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {builds.map((build) => (
-            <Link
-              key={build.id}
-              href={`/dashboard/builds/${build.id}`}
-              className="block"
-            >
-              <div className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <div className="font-medium">
-                      {build.projectName} #{build.buildNumber}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {build.branch} - {build.scriptingBackend}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right text-sm text-muted-foreground">
-                    <div>{formatDate(build.createdAt)}</div>
-                    {build.startedAt && (
+          {builds.map((build) => {
+            const isRunning = runningStatuses.includes(build.status);
+            const progress = progressMap[build.id];
+
+            return (
+              <Link
+                key={build.id}
+                href={`/dashboard/builds/${build.id}`}
+                className="block"
+              >
+                <div className="flex flex-col p-4 rounded-lg border hover:bg-accent/50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {isRunning && (
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                      )}
                       <div>
-                        Duration: {formatDuration(build.startedAt, build.completedAt)}
+                        <div className="font-medium">
+                          {build.projectName} #{build.buildNumber}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {build.branch} - {build.scriptingBackend}
+                        </div>
                       </div>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right text-sm text-muted-foreground">
+                        <div>{formatDate(build.createdAt)}</div>
+                        {build.startedAt && (
+                          <div>
+                            Duration: {formatDuration(build.startedAt, build.completedAt)}
+                          </div>
+                        )}
+                      </div>
+                      <Badge variant={statusVariants[build.status]}>
+                        {build.status}
+                      </Badge>
+                    </div>
                   </div>
-                  <Badge variant={statusVariants[build.status]}>
-                    {build.status}
-                  </Badge>
+
+                  {/* Mini progress bar for running builds */}
+                  {isRunning && progress && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                        <span>{progress.message}</span>
+                        {progress.progress > 0 && <span>{progress.progress}%</span>}
+                      </div>
+                      {progress.progress > 0 && (
+                        <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 transition-all duration-300"
+                            style={{ width: `${progress.progress}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
         {totalPages > 1 && (
           <div className="flex justify-center gap-2 mt-4">

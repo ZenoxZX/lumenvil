@@ -26,20 +26,31 @@ async function fetchApi<T>(
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (networkError) {
+    throw new Error('Unable to connect to server. Please check if the backend is running.');
+  }
 
   if (response.status === 401) {
     clearAuth();
     window.location.href = '/login';
-    throw new Error('Unauthorized');
+    throw new Error('Session expired. Please login again.');
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    throw new Error(error.message || `HTTP ${response.status}`);
+    let errorMessage = `Server error (${response.status})`;
+    try {
+      const error = await response.json();
+      errorMessage = error.message || error.title || errorMessage;
+    } catch {
+      // Response body is not JSON or empty
+    }
+    throw new Error(errorMessage);
   }
 
   if (response.status === 204) {
