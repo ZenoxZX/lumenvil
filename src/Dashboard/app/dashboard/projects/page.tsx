@@ -27,7 +27,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Trash2, Hammer, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Hammer, CheckCircle, Pencil } from 'lucide-react';
 
 function DialogComponent({
   children,
@@ -307,15 +307,24 @@ export default function ProjectsPage() {
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/dashboard/builds?projectId=${project.id}`}>View Builds</Link>
                 </Button>
-                {hasRole('Admin') && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDeleteProject(project)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                )}
+                <div className="flex gap-1">
+                  {canEdit && (
+                    <Button variant="ghost" size="icon" asChild>
+                      <Link href={`/dashboard/projects/${project.id}/edit`}>
+                        <Pencil className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  )}
+                  {hasRole('Admin') && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteProject(project)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
               </CardFooter>
             </Card>
           ))}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Project, ScriptingBackend } from '@/types';
-import { getProjects, createBuild } from '@/lib/api';
+import { getProjects, createBuild, getGitBranches } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+import { RefreshCw } from 'lucide-react';
 
 interface NewBuildFormProps {
   projectId?: string;
@@ -34,8 +35,28 @@ export function NewBuildForm({ projectId }: NewBuildFormProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>(projectId || '');
   const [branch, setBranch] = useState<string>('');
+  const [branches, setBranches] = useState<string[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
   const [scriptingBackend, setScriptingBackend] = useState<ScriptingBackend>('IL2CPP');
   const [submitting, setSubmitting] = useState(false);
+
+  const loadBranches = async (gitUrl: string) => {
+    if (!gitUrl) {
+      setBranches([]);
+      return;
+    }
+
+    setLoadingBranches(true);
+    try {
+      const response = await getGitBranches(gitUrl);
+      setBranches(response.branches);
+    } catch (error) {
+      console.error('Failed to load branches:', error);
+      setBranches([]);
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -45,10 +66,16 @@ export function NewBuildForm({ projectId }: NewBuildFormProps) {
         if (!projectId && data.length > 0) {
           setSelectedProject(data[0].id);
           setBranch(data[0].defaultBranch);
+          if (data[0].gitUrl) {
+            await loadBranches(data[0].gitUrl);
+          }
         } else if (projectId) {
           const project = data.find((p) => p.id === projectId);
           if (project) {
             setBranch(project.defaultBranch);
+            if (project.gitUrl) {
+              await loadBranches(project.gitUrl);
+            }
           }
         }
       } catch (error) {
@@ -58,11 +85,22 @@ export function NewBuildForm({ projectId }: NewBuildFormProps) {
     fetchProjects();
   }, [projectId]);
 
-  const handleProjectChange = (value: string) => {
+  const handleProjectChange = async (value: string) => {
     setSelectedProject(value);
     const project = projects.find((p) => p.id === value);
     if (project) {
       setBranch(project.defaultBranch);
+      setBranches([]);
+      if (project.gitUrl) {
+        await loadBranches(project.gitUrl);
+      }
+    }
+  };
+
+  const handleRefreshBranches = async () => {
+    const project = projects.find((p) => p.id === selectedProject);
+    if (project?.gitUrl) {
+      await loadBranches(project.gitUrl);
     }
   };
 
@@ -130,12 +168,41 @@ export function NewBuildForm({ projectId }: NewBuildFormProps) {
 
           <div className="space-y-2">
             <Label htmlFor="branch">Branch</Label>
-            <Input
-              id="branch"
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
-              placeholder="main"
-            />
+            <div className="flex gap-2">
+              {branches.length > 0 ? (
+                <Select value={branch} onValueChange={setBranch}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select a branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="branch"
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  placeholder="main"
+                  className="flex-1"
+                />
+              )}
+              {projects.find((p) => p.id === selectedProject)?.gitUrl && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleRefreshBranches}
+                  disabled={loadingBranches}
+                >
+                  <RefreshCw className={`h-4 w-4 ${loadingBranches ? 'animate-spin' : ''}`} />
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">

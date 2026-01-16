@@ -122,3 +122,22 @@ export async function cancelBuild(id: string): Promise<void> {
     method: 'POST',
   });
 }
+
+// Git
+export interface GitBranchesResponse {
+  branches: string[];
+}
+
+export interface GitValidateResponse {
+  valid: boolean;
+}
+
+export async function getGitBranches(gitUrl: string): Promise<GitBranchesResponse> {
+  const params = new URLSearchParams({ gitUrl });
+  return fetchApi<GitBranchesResponse>(`/git/branches?${params}`);
+}
+
+export async function validateGitRepository(gitUrl: string): Promise<GitValidateResponse> {
+  const params = new URLSearchParams({ gitUrl });
+  return fetchApi<GitValidateResponse>(`/git/validate?${params}`);
+}
