@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -6,11 +7,19 @@ using Backend.Data;
 using Backend.Hubs;
 using Backend.Models;
 using Backend.Services;
+using DotNetEnv;
+
+// Load .env file
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -19,7 +28,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "BuildAutomationSecretKey123456789012345678901234567890";
+var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY")
+    ?? builder.Configuration["Jwt:Key"]
+    ?? throw new Exception("JWT_KEY not configured");
+var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER")
+    ?? builder.Configuration["Jwt:Issuer"]
+    ?? "BuildAutomation";
+var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE")
+    ?? builder.Configuration["Jwt:Audience"]
+    ?? "BuildAutomation";
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -29,8 +46,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "BuildAutomation",
-            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "BuildAutomation",
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
 
@@ -80,6 +97,7 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.UseDeveloperExceptionPage();
 }
 
 app.UseCors("AllowDashboard");
@@ -98,18 +116,22 @@ using (var scope = app.Services.CreateScope())
     // Seed admin user if not exists
     if (!context.Users.Any())
     {
+        var adminUsername = Environment.GetEnvironmentVariable("ADMIN_USERNAME") ?? "admin";
+        var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "admin123";
+        var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL") ?? "admin@buildautomation.local";
+
         var adminUser = new User
         {
             Id = Guid.NewGuid(),
-            Username = "admin",
-            Email = "admin@buildautomation.local",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
+            Username = adminUsername,
+            Email = adminEmail,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
             Role = UserRole.Admin,
             CreatedAt = DateTime.UtcNow
         };
         context.Users.Add(adminUser);
         context.SaveChanges();
-        Console.WriteLine("Admin user created - Username: admin, Password: admin123");
+        Console.WriteLine($"Admin user created - Username: {adminUsername}");
     }
 }
 
