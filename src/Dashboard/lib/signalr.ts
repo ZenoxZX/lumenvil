@@ -7,6 +7,7 @@ import { BuildLog, BuildStatus } from '@/types';
 const HUB_URL = process.env.NEXT_PUBLIC_HUB_URL || 'http://localhost:5000/hubs/build';
 
 let connection: signalR.HubConnection | null = null;
+let connectionPromise: Promise<void> | null = null;
 
 export interface BuildProgressEvent {
   buildId: string;
@@ -48,18 +49,34 @@ const eventCallbacks: {
 };
 
 export async function connectToHub(): Promise<void> {
+  // Already connected
   if (connection?.state === signalR.HubConnectionState.Connected) {
     return;
   }
 
+  // Connection in progress - wait for it
+  if (connectionPromise) {
+    return connectionPromise;
+  }
+
   const token = getToken();
+
+  // Stop existing connection if any
+  if (connection) {
+    try {
+      await connection.stop();
+    } catch {
+      // Ignore stop errors
+    }
+    connection = null;
+  }
 
   connection = new signalR.HubConnectionBuilder()
     .withUrl(HUB_URL, {
       accessTokenFactory: () => token || '',
     })
     .withAutomaticReconnect()
-    .configureLogging(signalR.LogLevel.Information)
+    .configureLogging(signalR.LogLevel.Warning)
     .build();
 
   connection.on('BuildProgress', (data: BuildProgressEvent) => {
@@ -88,15 +105,29 @@ export async function connectToHub(): Promise<void> {
 
   connection.onclose(() => {
     console.log('SignalR connection closed');
+    connectionPromise = null;
   });
 
-  await connection.start();
-  console.log('SignalR connected');
+  connectionPromise = connection.start().then(() => {
+    console.log('SignalR connected');
+    connectionPromise = null;
+  }).catch((err) => {
+    console.error('SignalR connection failed:', err);
+    connectionPromise = null;
+    throw err;
+  });
+
+  return connectionPromise;
 }
 
 export async function disconnectFromHub(): Promise<void> {
+  connectionPromise = null;
   if (connection) {
-    await connection.stop();
+    try {
+      await connection.stop();
+    } catch {
+      // Ignore stop errors
+    }
     connection = null;
   }
 }
