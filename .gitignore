@@ -1,0 +1,28 @@
+# Roadmap
+ROADMAP.md
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+
+# Node
+node_modules/
+.next/
+.env*.local
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
