@@ -57,6 +57,7 @@ builder.Services.AddSignalR();
 
 // Services
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddSingleton<IGitApiService, GitApiService>();
 builder.Services.AddSingleton<BuildQueueService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<BuildQueueService>());
 

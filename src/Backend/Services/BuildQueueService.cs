@@ -77,7 +77,8 @@ public class BuildQueueService : BackgroundService
             Branch = build.Branch,
             ScriptingBackend = build.ScriptingBackend.ToString(),
             UnityVersion = build.Project.UnityVersion,
-            BuildPath = build.Project.BuildPath
+            BuildPath = build.Project.BuildPath,
+            GitUrl = build.Project.GitUrl
         }, stoppingToken);
     }
 
@@ -194,6 +195,24 @@ public class BuildQueueService : BackgroundService
         {
             BuildId = buildId,
             Log = new BuildLogResponse(log.Id, log.Timestamp, log.Level, log.Message, log.Stage)
+        });
+    }
+
+    public async Task UpdateBuildCommitHashAsync(Guid buildId, string? commitHash)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var build = await context.Builds.FindAsync(buildId);
+        if (build == null) return;
+
+        build.CommitHash = commitHash;
+        await context.SaveChangesAsync();
+
+        await _hubContext.Clients.All.SendAsync("BuildCommitHashUpdated", new
+        {
+            BuildId = buildId,
+            CommitHash = commitHash
         });
     }
 }

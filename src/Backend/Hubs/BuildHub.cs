@@ -88,4 +88,9 @@ public class BuildHub : Hub
             BuildSize = buildSize
         });
     }
+
+    public async Task UpdateBuildCommitHash(Guid buildId, string? commitHash)
+    {
+        await _buildQueueService.UpdateBuildCommitHashAsync(buildId, commitHash);
+    }
 }
