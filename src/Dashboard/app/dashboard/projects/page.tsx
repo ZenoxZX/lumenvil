@@ -42,7 +42,10 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const canEdit = hasRole('Developer');
+  const [mounted, setMounted] = useState(false);
+
+  const canEdit = mounted && hasRole('Developer');
+  const isAdmin = mounted && hasRole('Admin');
 
   const [newProject, setNewProject] = useState({
     name: '',
@@ -56,6 +59,7 @@ export default function ProjectsPage() {
   });
 
   useEffect(() => {
+    setMounted(true);
     fetchProjects();
   }, []);
 
@@ -315,7 +319,7 @@ export default function ProjectsPage() {
                       </Link>
                     </Button>
                   )}
-                  {hasRole('Admin') && (
+                  {isAdmin && (
                     <Button
                       variant="ghost"
                       size="icon"
