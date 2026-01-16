@@ -10,4 +10,5 @@ public class BuildJob
     public string ScriptingBackend { get; set; } = "IL2CPP";
     public string UnityVersion { get; set; } = string.Empty;
     public string BuildPath { get; set; } = string.Empty;
+    public string? GitUrl { get; set; }
 }

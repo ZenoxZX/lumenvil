@@ -9,28 +9,69 @@ public class UnityBuildRunner
 {
     private readonly ILogger<UnityBuildRunner> _logger;
     private readonly AgentHubClient _hubClient;
+    private readonly IGitService _gitService;
     private readonly string _unityHubPath;
     private readonly string _buildOutputBase;
+    private readonly string _workspacePath;
 
     public UnityBuildRunner(
         ILogger<UnityBuildRunner> logger,
         AgentHubClient hubClient,
+        IGitService gitService,
         string? unityHubPath = null,
-        string? buildOutputBase = null)
+        string? buildOutputBase = null,
+        string? workspacePath = null)
     {
         _logger = logger;
         _hubClient = hubClient;
+        _gitService = gitService;
         _unityHubPath = unityHubPath ?? @"C:\Program Files\Unity\Hub\Editor";
         _buildOutputBase = buildOutputBase ?? @"D:\Builds";
+        _workspacePath = workspacePath ?? @"D:\Workspaces";
     }
 
     public async Task<bool> RunBuildAsync(BuildJob job, CancellationToken cancellationToken)
     {
         var buildId = job.BuildId;
         var outputPath = Path.Combine(_buildOutputBase, job.ProjectName, $"Build_{job.BuildNumber}");
+        var projectPath = job.BuildPath;
 
         try
         {
+            // Step 1: Git operations if GitUrl is provided
+            if (!string.IsNullOrEmpty(job.GitUrl))
+            {
+                var targetPath = Path.Combine(_workspacePath, job.ProjectName);
+
+                _logger.LogInformation("Git URL provided, ensuring repository at {Path}", targetPath);
+
+                var gitResult = await _gitService.EnsureRepositoryAsync(
+                    buildId,
+                    job.GitUrl,
+                    targetPath,
+                    job.Branch,
+                    cancellationToken);
+
+                if (!gitResult.Success)
+                {
+                    await _hubClient.AddBuildLogAsync(buildId, "Error", $"Git operation failed: {gitResult.ErrorMessage}", "Clone");
+                    await _hubClient.BuildCompletedAsync(buildId, false);
+                    return false;
+                }
+
+                // Update project path to cloned repository
+                projectPath = targetPath;
+
+                // Get and report commit hash
+                var commitHash = await _gitService.GetCurrentCommitHashAsync(projectPath);
+                if (!string.IsNullOrEmpty(commitHash))
+                {
+                    await _hubClient.AddBuildLogAsync(buildId, "Info", $"Building commit: {commitHash}", "Clone");
+                    await _hubClient.UpdateBuildCommitHashAsync(buildId, commitHash);
+                }
+            }
+
+            // Step 2: Unity build
             await _hubClient.UpdateBuildStatusAsync(buildId, "Building");
             await _hubClient.AddBuildLogAsync(buildId, "Info", "Starting Unity build...", "Build");
 
@@ -48,8 +89,7 @@ public class UnityBuildRunner
             // Ensure output directory exists
             Directory.CreateDirectory(outputPath);
 
-            // Build arguments
-            var projectPath = job.BuildPath;
+            // Build arguments - use the potentially updated projectPath
             var buildTargetPath = Path.Combine(outputPath, $"{job.ProjectName}.exe");
             var logPath = Path.Combine(outputPath, "build.log");
 

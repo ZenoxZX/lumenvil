@@ -95,6 +95,11 @@ public class AgentHubClient : IAsyncDisposable
         await _connection.InvokeAsync("BuildCompleted", buildId, success, outputPath, buildSize);
     }
 
+    public async Task UpdateBuildCommitHashAsync(Guid buildId, string? commitHash)
+    {
+        await _connection.InvokeAsync("UpdateBuildCommitHash", buildId, commitHash);
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _connection.DisposeAsync();

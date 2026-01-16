@@ -12,6 +12,7 @@ var host = Host.CreateDefaultBuilder(args)
         var agentName = context.Configuration["AgentName"] ?? Environment.MachineName;
         var unityHubPath = context.Configuration["UnityHubPath"] ?? @"C:\Program Files\Unity\Hub\Editor";
         var buildOutputBase = context.Configuration["BuildOutputBase"] ?? @"D:\Builds";
+        var workspacePath = context.Configuration["WorkspacePath"] ?? @"D:\Workspaces";
 
         // Logging
         services.AddLogging(logging =>
@@ -27,11 +28,19 @@ var host = Host.CreateDefaultBuilder(args)
             return new AgentHubClient(hubUrl, agentName, logger);
         });
 
+        services.AddSingleton<IGitService>(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<GitService>>();
+            var hubClient = sp.GetRequiredService<AgentHubClient>();
+            return new GitService(logger, hubClient, workspacePath);
+        });
+
         services.AddSingleton(sp =>
         {
             var logger = sp.GetRequiredService<ILogger<UnityBuildRunner>>();
             var hubClient = sp.GetRequiredService<AgentHubClient>();
-            return new UnityBuildRunner(logger, hubClient, unityHubPath, buildOutputBase);
+            var gitService = sp.GetRequiredService<IGitService>();
+            return new UnityBuildRunner(logger, hubClient, gitService, unityHubPath, buildOutputBase, workspacePath);
         });
 
         services.AddHostedService(sp =>
@@ -49,6 +58,7 @@ var host = Host.CreateDefaultBuilder(args)
         Console.WriteLine($"Hub URL: {hubUrl}");
         Console.WriteLine($"Unity Hub Path: {unityHubPath}");
         Console.WriteLine($"Build Output: {buildOutputBase}");
+        Console.WriteLine($"Workspace Path: {workspacePath}");
         Console.WriteLine("===========================================");
         Console.WriteLine("Press Ctrl+C to stop");
         Console.WriteLine();
