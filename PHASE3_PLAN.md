@@ -4,6 +4,61 @@
 
 Faz 3'ün hedefi **canlı build takip sistemi** oluşturmak. Kullanıcılar build'in hangi aşamada olduğunu, logları ve ilerlemeyi gerçek zamanlı görebilecek.
 
+---
+
+## Ön Gereksinim: Environment Variables
+
+Sensitive değerleri environment variable'a taşı.
+
+### Backend `.env` Dosyası
+**Dosya:** `src/Backend/.env.example` (YENİ - repo'ya commit edilecek)
+
+```env
+# JWT Configuration
+JWT_KEY=your-super-secret-key-min-32-characters
+JWT_ISSUER=BuildAutomation
+JWT_AUDIENCE=BuildAutomation
+
+# Admin Seed User
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-this-password
+ADMIN_EMAIL=admin@example.com
+
+# Database
+DATABASE_PATH=../database/buildautomation.db
+```
+
+**Dosya:** `src/Backend/.env` (YENİ - gitignore'da, local kullanım)
+
+### Backend Güncellemeleri
+
+**Dosya:** `src/Backend/Program.cs` (GÜNCELLE)
+```csharp
+// .env dosyasını yükle
+DotNetEnv.Env.Load();
+
+// Environment variable'lardan oku
+var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY")
+    ?? builder.Configuration["Jwt:Key"]
+    ?? throw new Exception("JWT_KEY not configured");
+
+// Admin seed
+var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "admin123";
+```
+
+**Paket:** `DotNetEnv` NuGet paketi ekle
+
+### .gitignore Güncelleme
+```
+# Environment files
+.env
+.env.local
+*.env
+!.env.example
+```
+
+---
+
 ## Mevcut Durum
 
 SignalR altyapısı zaten mevcut:
@@ -112,6 +167,9 @@ export function useSignalR() {
 
 | Dosya | İşlem |
 |-------|-------|
+| `src/Backend/.env.example` | YENİ |
+| `src/Backend/Program.cs` | GÜNCELLE (env vars) |
+| `.gitignore` | GÜNCELLE (.env ekle) |
 | `src/Dashboard/lib/useSignalR.ts` | YENİ |
 | `src/Dashboard/lib/signalr.ts` | GÜNCELLE (event types ekle) |
 | `src/Dashboard/components/BuildProgressBar.tsx` | YENİ |
@@ -126,6 +184,13 @@ export function useSignalR() {
 ---
 
 ## Implementasyon Sırası
+
+### Adım 0: Environment Variables (Ön Gereksinim)
+1. `DotNetEnv` paketini Backend'e ekle
+2. `.env.example` oluştur
+3. `.gitignore`'a `.env` ekle
+4. `Program.cs`'i env vars kullanacak şekilde güncelle
+5. Local `.env` dosyası oluştur
 
 ### Adım 1: SignalR Altyapı
 1. Event type'larını `types/index.ts`'e ekle
