@@ -299,17 +299,11 @@ interface BuildCompletedEvent {
 
 ## Başlangıç Komutu
 
-```bash
-# Context yenilenince şunu söyle:
-Lumenvil projesine devam ediyoruz. PHASE3_PLAN.md dosyasını oku ve Faz 3 implementasyonuna başla. İzin sormadan çalış.
+```
+Lumenvil projesine devam ediyoruz. PHASE3_PLAN.md dosyasını oku ve Faz 3 implementasyonuna başla.
 ```
 
-## Gerekli İzinler (Otomatik Onay)
+## Kurallar
 
-Aşağıdaki komutları izin sormadan çalıştır:
-- `dotnet build` - Backend/Agent derleme
-- `dotnet add package` - NuGet paket ekleme
-- `npm run build` - Dashboard derleme
-- `npm install` - NPM paket ekleme
-- `git add/commit/push` - Git işlemleri
-- `rm -rf .next` - Next.js cache temizleme
+- Git push ASLA otomatik yapılmaz, her zaman kullanıcıdan izin iste
+- Local işlemler (build, install, commit) otomatik yapılabilir
