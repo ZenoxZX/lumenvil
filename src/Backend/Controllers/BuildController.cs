@@ -140,6 +140,18 @@ public class BuildController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            if (ex.InnerException?.Message.Contains("FOREIGN KEY") == true)
+            {
+                return BadRequest(new { message = "Project not found. Please select a valid project." });
+            }
+            return StatusCode(500, new { message = "Database error occurred. Please try again." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"An unexpected error occurred: {ex.Message}" });
+        }
     }
 
     [HttpPost("{id}/cancel")]
