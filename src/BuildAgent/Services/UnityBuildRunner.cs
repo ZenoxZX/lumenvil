@@ -25,9 +25,18 @@ public class UnityBuildRunner
         _logger = logger;
         _hubClient = hubClient;
         _gitService = gitService;
-        _unityHubPath = unityHubPath ?? @"C:\Program Files\Unity\Hub\Editor";
-        _buildOutputBase = buildOutputBase ?? @"D:\Builds";
-        _workspacePath = workspacePath ?? @"D:\Workspaces";
+        _unityHubPath = unityHubPath ?? GetDefaultUnityHubPath();
+        _buildOutputBase = buildOutputBase ?? "./builds";
+        _workspacePath = workspacePath ?? "./workspace";
+    }
+
+    private static string GetDefaultUnityHubPath()
+    {
+        if (OperatingSystem.IsMacOS())
+            return "/Applications/Unity/Hub/Editor";
+        if (OperatingSystem.IsLinux())
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Unity/Hub/Editor");
+        return @"C:\Program Files\Unity\Hub\Editor";
     }
 
     public async Task<bool> RunBuildAsync(BuildJob job, CancellationToken cancellationToken)
@@ -90,7 +99,14 @@ public class UnityBuildRunner
             Directory.CreateDirectory(outputPath);
 
             // Build arguments - use the potentially updated projectPath
-            var buildTargetPath = Path.Combine(outputPath, $"{job.ProjectName}.exe");
+            var isMac = OperatingSystem.IsMacOS();
+            var isLinux = OperatingSystem.IsLinux();
+
+            string buildExtension = isMac ? ".app" : (isLinux ? "" : ".exe");
+            string buildTarget = isMac ? "OSXUniversal" : (isLinux ? "Linux64" : "Win64");
+            string buildMethod = isMac ? "BuildScript.BuildMac" : (isLinux ? "BuildScript.BuildLinux" : "BuildScript.BuildWindows");
+
+            var buildTargetPath = Path.Combine(outputPath, $"{job.ProjectName}{buildExtension}");
             var logPath = Path.Combine(outputPath, "build.log");
 
             var args = new List<string>
@@ -99,8 +115,8 @@ public class UnityBuildRunner
                 "-batchmode",
                 "-nographics",
                 "-projectPath", $"\"{projectPath}\"",
-                "-buildTarget", "Win64",
-                "-executeMethod", "BuildScript.BuildWindows",
+                "-buildTarget", buildTarget,
+                "-executeMethod", buildMethod,
                 $"-outputPath", $"\"{buildTargetPath}\"",
                 $"-scriptingBackend", job.ScriptingBackend,
                 "-logFile", $"\"{logPath}\""
@@ -171,7 +187,20 @@ public class UnityBuildRunner
 
     private string? FindUnityEditor(string version)
     {
-        var versionPath = Path.Combine(_unityHubPath, version, "Editor", "Unity.exe");
+        // Platform-specific Unity executable paths
+        var isMac = OperatingSystem.IsMacOS();
+        var isLinux = OperatingSystem.IsLinux();
+
+        string GetEditorPath(string versionDir)
+        {
+            if (isMac)
+                return Path.Combine(versionDir, "Unity.app", "Contents", "MacOS", "Unity");
+            if (isLinux)
+                return Path.Combine(versionDir, "Editor", "Unity");
+            return Path.Combine(versionDir, "Editor", "Unity.exe");
+        }
+
+        var versionPath = GetEditorPath(Path.Combine(_unityHubPath, version));
         if (File.Exists(versionPath))
         {
             return versionPath;
@@ -184,7 +213,7 @@ public class UnityBuildRunner
             var match = directories.FirstOrDefault(d => Path.GetFileName(d).StartsWith(version.Split('.')[0]));
             if (match != null)
             {
-                var editorPath = Path.Combine(match, "Editor", "Unity.exe");
+                var editorPath = GetEditorPath(match);
                 if (File.Exists(editorPath))
                 {
                     return editorPath;

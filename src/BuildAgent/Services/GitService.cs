@@ -30,7 +30,7 @@ public class GitService : IGitService
     {
         _logger = logger;
         _hubClient = hubClient;
-        _workspacePath = workspacePath ?? @"D:\Workspaces";
+        _workspacePath = workspacePath ?? "./workspace";
     }
 
     public async Task<GitOperationResult> EnsureRepositoryAsync(Guid buildId, string gitUrl, string targetPath, string branch, CancellationToken ct)

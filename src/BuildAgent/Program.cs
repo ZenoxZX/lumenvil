@@ -10,9 +10,9 @@ var host = Host.CreateDefaultBuilder(args)
         // Configuration
         var hubUrl = context.Configuration["HubUrl"] ?? "http://localhost:5000/hubs/build";
         var agentName = context.Configuration["AgentName"] ?? Environment.MachineName;
-        var unityHubPath = context.Configuration["UnityHubPath"] ?? @"C:\Program Files\Unity\Hub\Editor";
-        var buildOutputBase = context.Configuration["BuildOutputBase"] ?? @"D:\Builds";
-        var workspacePath = context.Configuration["WorkspacePath"] ?? @"D:\Workspaces";
+        var unityHubPath = context.Configuration["UnityHubPath"] ?? GetDefaultUnityHubPath();
+        var buildOutputBase = context.Configuration["BuildOutputBase"] ?? "./builds";
+        var workspacePath = context.Configuration["WorkspacePath"] ?? "./workspace";
 
         // Logging
         services.AddLogging(logging =>
@@ -66,3 +66,12 @@ var host = Host.CreateDefaultBuilder(args)
     .Build();
 
 await host.RunAsync();
+
+static string GetDefaultUnityHubPath()
+{
+    if (OperatingSystem.IsMacOS())
+        return "/Applications/Unity/Hub/Editor";
+    if (OperatingSystem.IsLinux())
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Unity/Hub/Editor");
+    return @"C:\Program Files\Unity\Hub\Editor";
+}
