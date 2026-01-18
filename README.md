@@ -316,6 +316,12 @@ Full API documentation available at `/swagger` when running in development.
 
 MIT License - see [LICENSE](LICENSE) for details.
 
+### Commercial Use
+
+This project is free and open source. If you're using Lumenvil commercially or as part of a paid service, I'd love to hear from you! While not required, reaching out helps me understand how the project is being used and prioritize features.
+
+Contact: [aygunozmen@gmail.com](mailto:aygunozmen@gmail.com)
+
 ---
 
 <div align="center">
