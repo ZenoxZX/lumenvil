@@ -7,6 +7,9 @@ import {
   PaginatedResponse,
   CreateBuildRequest,
   CreateProjectRequest,
+  User,
+  CreateUserRequest,
+  UpdateRoleRequest,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -151,4 +154,29 @@ export async function getGitBranches(gitUrl: string): Promise<GitBranchesRespons
 export async function validateGitRepository(gitUrl: string): Promise<GitValidateResponse> {
   const params = new URLSearchParams({ gitUrl });
   return fetchApi<GitValidateResponse>(`/git/validate?${params}`);
+}
+
+// Users
+export async function getUsers(): Promise<User[]> {
+  return fetchApi<User[]>('/user');
+}
+
+export async function createUser(data: CreateUserRequest): Promise<User> {
+  return fetchApi<User>('/user', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateUserRole(id: string, data: UpdateRoleRequest): Promise<User> {
+  return fetchApi<User>(`/user/${id}/role`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  return fetchApi<void>(`/user/${id}`, {
+    method: 'DELETE',
+  });
 }

@@ -105,3 +105,14 @@ export interface CreateProjectRequest {
   steamAppId?: string;
   steamDepotId?: string;
 }
+
+export interface CreateUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface UpdateRoleRequest {
+  role: UserRole;
+}

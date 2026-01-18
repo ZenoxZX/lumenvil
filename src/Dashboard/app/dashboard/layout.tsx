@@ -12,6 +12,7 @@ import {
   FolderKanban,
   LogOut,
   Settings,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BuildNotifications } from '@/components/BuildNotifications';
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Builds', href: '/dashboard/builds', icon: Hammer },
   { name: 'Projects', href: '/dashboard/projects', icon: FolderKanban },
+  { name: 'Users', href: '/dashboard/users', icon: Users, adminOnly: true },
 ];
 
 export default function DashboardLayout({
@@ -73,6 +75,12 @@ export default function DashboardLayout({
 
         <nav className="flex-1 px-4 space-y-1">
           {navigation.map((item) => {
+            // Hide admin-only items for non-admins
+            if (item.adminOnly) {
+              const userRole = typeof user.role === 'number' ? user.role : ['Viewer', 'Developer', 'Admin'].indexOf(user.role);
+              if (userRole !== 2) return null;
+            }
+
             const isActive = item.href === '/dashboard'
               ? pathname === '/dashboard'
               : pathname === item.href || pathname.startsWith(`${item.href}/`);

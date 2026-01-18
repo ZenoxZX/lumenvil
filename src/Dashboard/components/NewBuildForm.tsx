@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Project, ScriptingBackend } from '@/types';
 import { getProjects, createBuild, getGitBranches } from '@/lib/api';
+import { hasRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,9 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [scriptingBackend, setScriptingBackend] = useState<ScriptingBackend>('IL2CPP');
   const [submitting, setSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  const canCreateBuild = mounted && hasRole('Developer');
 
   const loadBranches = async (gitUrl: string) => {
     if (!gitUrl) {
@@ -60,6 +64,7 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
   };
 
   useEffect(() => {
+    setMounted(true);
     const fetchProjects = async () => {
       try {
         const data = await getProjects();
@@ -139,6 +144,11 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
       setSubmitting(false);
     }
   };
+
+  // Don't show the form if user doesn't have permission
+  if (!canCreateBuild) {
+    return null;
+  }
 
   return (
     <Card>
