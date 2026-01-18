@@ -93,6 +93,9 @@ builder.Services.AddSingleton<NotificationService>();
 builder.Services.AddSingleton<BuildCleanupService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<BuildCleanupService>());
 
+// Code Generator Service
+builder.Services.AddSingleton<CodeGeneratorService>();
+
 // CORS
 builder.Services.AddCors(options =>
 {
