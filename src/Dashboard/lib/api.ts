@@ -229,3 +229,85 @@ export async function testSteamConnection(): Promise<{ message: string }> {
 export async function getPlatforms(): Promise<PlatformInfo[]> {
   return fetchApi<PlatformInfo[]>('/settings/platforms');
 }
+
+// Notifications
+export type NotificationEvent =
+  | 'BuildStarted'
+  | 'BuildCompleted'
+  | 'BuildFailed'
+  | 'BuildCancelled'
+  | 'UploadCompleted'
+  | 'UploadFailed';
+
+export type NotificationChannel = 'Discord' | 'Slack' | 'Webhook';
+
+export interface DiscordSettings {
+  enabled: boolean;
+  webhookUrl: string | null;
+  events: NotificationEvent[];
+}
+
+export interface SlackSettings {
+  enabled: boolean;
+  webhookUrl: string | null;
+  events: NotificationEvent[];
+}
+
+export interface WebhookSettings {
+  enabled: boolean;
+  url: string | null;
+  hasSecret: boolean;
+  events: NotificationEvent[];
+}
+
+export interface NotificationSettings {
+  discord: DiscordSettings;
+  slack: SlackSettings;
+  webhook: WebhookSettings;
+}
+
+export interface UpdateDiscordSettings {
+  enabled: boolean;
+  webhookUrl?: string | null;
+  events?: NotificationEvent[];
+}
+
+export interface UpdateSlackSettings {
+  enabled: boolean;
+  webhookUrl?: string | null;
+  events?: NotificationEvent[];
+}
+
+export interface UpdateWebhookSettings {
+  enabled: boolean;
+  url?: string | null;
+  secret?: string | null;
+  events?: NotificationEvent[];
+}
+
+export interface UpdateNotificationSettingsRequest {
+  discord?: UpdateDiscordSettings;
+  slack?: UpdateSlackSettings;
+  webhook?: UpdateWebhookSettings;
+}
+
+export async function getNotificationSettings(): Promise<NotificationSettings> {
+  return fetchApi<NotificationSettings>('/settings/notifications');
+}
+
+export async function updateNotificationSettings(
+  data: UpdateNotificationSettingsRequest
+): Promise<NotificationSettings> {
+  return fetchApi<NotificationSettings>('/settings/notifications', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function testNotificationChannel(
+  channel: NotificationChannel
+): Promise<{ message: string }> {
+  return fetchApi<{ message: string }>(`/settings/notifications/test/${channel}`, {
+    method: 'POST',
+  });
+}
