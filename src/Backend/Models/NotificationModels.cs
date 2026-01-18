@@ -79,10 +79,20 @@ public class WebhookConfig
     public bool IsConfigured => Enabled && !string.IsNullOrEmpty(Url);
 }
 
+// Project-specific notification settings
+public class ProjectNotificationConfig
+{
+    public bool UseGlobalSettings { get; set; } = true;
+    public DiscordConfig? Discord { get; set; }
+    public SlackConfig? Slack { get; set; }
+    public WebhookConfig? Webhook { get; set; }
+}
+
 // Notification payload for services
 public record BuildNotification(
     NotificationEvent Event,
     Guid BuildId,
+    Guid ProjectId,
     int BuildNumber,
     string ProjectName,
     string Branch,
@@ -91,5 +101,6 @@ public record BuildNotification(
     TimeSpan? Duration,
     long? BuildSize,
     string? TriggeredBy,
-    DateTime Timestamp
+    DateTime Timestamp,
+    string? ProjectNotificationSettingsJson = null
 );

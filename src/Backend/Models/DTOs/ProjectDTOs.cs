@@ -8,7 +8,8 @@ public record CreateProjectRequest(
     string UnityVersion,
     string BuildPath,
     string? SteamAppId,
-    string? SteamDepotId
+    string? SteamDepotId,
+    ProjectNotificationSettingsDto? NotificationSettings = null
 );
 
 public record UpdateProjectRequest(
@@ -20,7 +21,8 @@ public record UpdateProjectRequest(
     string? BuildPath,
     string? SteamAppId,
     string? SteamDepotId,
-    bool? IsActive
+    bool? IsActive,
+    ProjectNotificationSettingsDto? NotificationSettings = null
 );
 
 public record ProjectResponse(
@@ -36,5 +38,59 @@ public record ProjectResponse(
     bool IsActive,
     DateTime CreatedAt,
     int TotalBuilds,
-    int SuccessfulBuilds
+    int SuccessfulBuilds,
+    ProjectNotificationSettingsDto? NotificationSettings = null
+);
+
+// Project notification settings DTOs
+public record ProjectNotificationSettingsDto(
+    bool UseGlobalSettings,
+    ProjectDiscordSettingsDto? Discord,
+    ProjectSlackSettingsDto? Slack,
+    ProjectWebhookSettingsDto? Webhook
+);
+
+public record ProjectDiscordSettingsDto(
+    bool Enabled,
+    string? WebhookUrl,
+    List<NotificationEvent>? Events
+);
+
+public record ProjectSlackSettingsDto(
+    bool Enabled,
+    string? WebhookUrl,
+    List<NotificationEvent>? Events
+);
+
+public record ProjectWebhookSettingsDto(
+    bool Enabled,
+    string? Url,
+    bool HasSecret,
+    List<NotificationEvent>? Events
+);
+
+public record UpdateProjectNotificationSettingsDto(
+    bool UseGlobalSettings,
+    UpdateProjectDiscordDto? Discord,
+    UpdateProjectSlackDto? Slack,
+    UpdateProjectWebhookDto? Webhook
+);
+
+public record UpdateProjectDiscordDto(
+    bool Enabled,
+    string? WebhookUrl,
+    List<NotificationEvent>? Events
+);
+
+public record UpdateProjectSlackDto(
+    bool Enabled,
+    string? WebhookUrl,
+    List<NotificationEvent>? Events
+);
+
+public record UpdateProjectWebhookDto(
+    bool Enabled,
+    string? Url,
+    string? Secret,
+    List<NotificationEvent>? Events
 );

@@ -97,21 +97,38 @@ public class BuildQueueService : BackgroundService
             throw new ArgumentException("Project not found");
         }
 
+        // Load template if specified
+        BuildTemplate? template = null;
+        if (request.TemplateId.HasValue)
+        {
+            template = await context.BuildTemplates.FindAsync(request.TemplateId.Value);
+            if (template == null)
+            {
+                throw new ArgumentException("Build template not found");
+            }
+        }
+
         var lastBuild = await context.Builds
             .Where(b => b.ProjectId == request.ProjectId)
             .OrderByDescending(b => b.BuildNumber)
             .FirstOrDefaultAsync();
+
+        // Use template values if available, otherwise use request values
+        var branch = request.Branch ?? template?.Branch ?? project.DefaultBranch;
+        var scriptingBackend = template?.ScriptingBackend ?? request.ScriptingBackend;
+        var uploadToSteam = template?.UploadToSteam ?? request.UploadToSteam;
+        var steamBranch = request.SteamBranch ?? template?.SteamBranch;
 
         var build = new Build
         {
             Id = Guid.NewGuid(),
             ProjectId = request.ProjectId,
             BuildNumber = (lastBuild?.BuildNumber ?? 0) + 1,
-            Branch = request.Branch ?? project.DefaultBranch,
-            ScriptingBackend = request.ScriptingBackend,
+            Branch = branch,
+            ScriptingBackend = scriptingBackend,
             Status = BuildStatus.Queued,
-            UploadToSteam = request.UploadToSteam,
-            SteamBranch = request.SteamBranch,
+            UploadToSteam = uploadToSteam,
+            SteamBranch = steamBranch,
             TriggeredById = triggeredById,
             CreatedAt = DateTime.UtcNow
         };
@@ -206,7 +223,8 @@ public class BuildQueueService : BackgroundService
                 build,
                 eventType.Value,
                 build.Project.Name,
-                build.TriggeredBy?.Username
+                build.TriggeredBy?.Username,
+                build.Project.NotificationSettingsJson
             );
 
             await _notificationService.SendNotificationAsync(notification);

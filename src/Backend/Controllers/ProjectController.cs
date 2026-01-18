@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,15 +20,44 @@ public class ProjectController : ControllerBase
         _context = context;
     }
 
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
+    private static ProjectNotificationSettingsDto? ParseNotificationSettings(string? json)
     {
-        var projects = await _context.Projects
-            .Include(p => p.Builds)
-            .OrderByDescending(p => p.CreatedAt)
-            .ToListAsync();
+        if (string.IsNullOrEmpty(json)) return null;
 
-        var response = projects.Select(p => new ProjectResponse(
+        try
+        {
+            var config = JsonSerializer.Deserialize<ProjectNotificationConfig>(json);
+            if (config == null) return null;
+
+            return new ProjectNotificationSettingsDto(
+                config.UseGlobalSettings,
+                config.Discord != null ? new ProjectDiscordSettingsDto(
+                    config.Discord.Enabled,
+                    config.Discord.WebhookUrl,
+                    config.Discord.Events
+                ) : null,
+                config.Slack != null ? new ProjectSlackSettingsDto(
+                    config.Slack.Enabled,
+                    config.Slack.WebhookUrl,
+                    config.Slack.Events
+                ) : null,
+                config.Webhook != null ? new ProjectWebhookSettingsDto(
+                    config.Webhook.Enabled,
+                    config.Webhook.Url,
+                    !string.IsNullOrEmpty(config.Webhook.Secret),
+                    config.Webhook.Events
+                ) : null
+            );
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private ProjectResponse ToResponse(Project p, int totalBuilds, int successfulBuilds)
+    {
+        return new ProjectResponse(
             p.Id,
             p.Name,
             p.Description,
@@ -39,6 +69,22 @@ public class ProjectController : ControllerBase
             p.SteamDepotId,
             p.IsActive,
             p.CreatedAt,
+            totalBuilds,
+            successfulBuilds,
+            ParseNotificationSettings(p.NotificationSettingsJson)
+        );
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var projects = await _context.Projects
+            .Include(p => p.Builds)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+
+        var response = projects.Select(p => ToResponse(
+            p,
             p.Builds.Count,
             p.Builds.Count(b => b.Status == BuildStatus.Success)
         ));
@@ -58,18 +104,8 @@ public class ProjectController : ControllerBase
             return NotFound();
         }
 
-        return Ok(new ProjectResponse(
-            project.Id,
-            project.Name,
-            project.Description,
-            project.GitUrl,
-            project.DefaultBranch,
-            project.UnityVersion,
-            project.BuildPath,
-            project.SteamAppId,
-            project.SteamDepotId,
-            project.IsActive,
-            project.CreatedAt,
+        return Ok(ToResponse(
+            project,
             project.Builds.Count,
             project.Builds.Count(b => b.Status == BuildStatus.Success)
         ));
@@ -98,24 +134,56 @@ public class ProjectController : ControllerBase
             CreatedAt = DateTime.UtcNow
         };
 
+        // Handle notification settings
+        if (request.NotificationSettings != null)
+        {
+            project.NotificationSettingsJson = SerializeNotificationSettings(request.NotificationSettings);
+        }
+
         _context.Projects.Add(project);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetById), new { id = project.Id }, new ProjectResponse(
-            project.Id,
-            project.Name,
-            project.Description,
-            project.GitUrl,
-            project.DefaultBranch,
-            project.UnityVersion,
-            project.BuildPath,
-            project.SteamAppId,
-            project.SteamDepotId,
-            project.IsActive,
-            project.CreatedAt,
-            0,
-            0
-        ));
+        return CreatedAtAction(nameof(GetById), new { id = project.Id }, ToResponse(project, 0, 0));
+    }
+
+    private static string? SerializeNotificationSettings(ProjectNotificationSettingsDto dto)
+    {
+        var config = new ProjectNotificationConfig
+        {
+            UseGlobalSettings = dto.UseGlobalSettings
+        };
+
+        if (dto.Discord != null)
+        {
+            config.Discord = new DiscordConfig
+            {
+                Enabled = dto.Discord.Enabled,
+                WebhookUrl = dto.Discord.WebhookUrl,
+                Events = dto.Discord.Events ?? new List<NotificationEvent>()
+            };
+        }
+
+        if (dto.Slack != null)
+        {
+            config.Slack = new SlackConfig
+            {
+                Enabled = dto.Slack.Enabled,
+                WebhookUrl = dto.Slack.WebhookUrl,
+                Events = dto.Slack.Events ?? new List<NotificationEvent>()
+            };
+        }
+
+        if (dto.Webhook != null)
+        {
+            config.Webhook = new WebhookConfig
+            {
+                Enabled = dto.Webhook.Enabled,
+                Url = dto.Webhook.Url,
+                Events = dto.Webhook.Events ?? new List<NotificationEvent>()
+            };
+        }
+
+        return JsonSerializer.Serialize(config);
     }
 
     [HttpPut("{id}")]
@@ -138,25 +206,17 @@ public class ProjectController : ControllerBase
         if (request.SteamDepotId != null) project.SteamDepotId = request.SteamDepotId;
         if (request.IsActive.HasValue) project.IsActive = request.IsActive.Value;
 
+        // Handle notification settings
+        if (request.NotificationSettings != null)
+        {
+            project.NotificationSettingsJson = SerializeNotificationSettings(request.NotificationSettings);
+        }
+
         await _context.SaveChangesAsync();
 
         var builds = await _context.Builds.Where(b => b.ProjectId == id).ToListAsync();
 
-        return Ok(new ProjectResponse(
-            project.Id,
-            project.Name,
-            project.Description,
-            project.GitUrl,
-            project.DefaultBranch,
-            project.UnityVersion,
-            project.BuildPath,
-            project.SteamAppId,
-            project.SteamDepotId,
-            project.IsActive,
-            project.CreatedAt,
-            builds.Count,
-            builds.Count(b => b.Status == BuildStatus.Success)
-        ));
+        return Ok(ToResponse(project, builds.Count, builds.Count(b => b.Status == BuildStatus.Success)));
     }
 
     [HttpDelete("{id}")]

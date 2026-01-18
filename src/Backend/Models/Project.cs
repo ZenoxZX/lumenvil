@@ -14,5 +14,9 @@ public class Project
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    // Per-project notification settings (JSON serialized)
+    // null = use global settings, non-null = override
+    public string? NotificationSettingsJson { get; set; }
+
     public ICollection<Build> Builds { get; set; } = new List<Build>();
 }

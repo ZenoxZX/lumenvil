@@ -51,36 +51,52 @@ public class NotificationService
 
     public async Task SendNotificationAsync(BuildNotification notification)
     {
-        var config = await GetConfigAsync();
+        // Check for project-specific settings
+        var projectConfig = ParseProjectNotificationConfig(notification.ProjectNotificationSettingsJson);
+        var useProjectSettings = projectConfig != null && !projectConfig.UseGlobalSettings;
+
+        var globalConfig = await GetConfigAsync();
         var httpClient = _httpClientFactory.CreateClient("notifications");
         var tasks = new List<Task>();
 
-        // Discord
-        if (config.Discord.IsConfigured && config.Discord.Events.Contains(notification.Event))
+        // Determine which Discord config to use
+        var discordConfig = useProjectSettings && projectConfig?.Discord != null
+            ? projectConfig.Discord
+            : globalConfig.Discord;
+
+        if (discordConfig.IsConfigured && discordConfig.Events.Contains(notification.Event))
         {
             var discordNotifier = new DiscordNotifier(
                 httpClient,
-                config.Discord,
+                discordConfig,
                 _loggerFactory.CreateLogger<DiscordNotifier>());
             tasks.Add(SendWithLogging(discordNotifier, notification));
         }
 
-        // Slack
-        if (config.Slack.IsConfigured && config.Slack.Events.Contains(notification.Event))
+        // Determine which Slack config to use
+        var slackConfig = useProjectSettings && projectConfig?.Slack != null
+            ? projectConfig.Slack
+            : globalConfig.Slack;
+
+        if (slackConfig.IsConfigured && slackConfig.Events.Contains(notification.Event))
         {
             var slackNotifier = new SlackNotifier(
                 httpClient,
-                config.Slack,
+                slackConfig,
                 _loggerFactory.CreateLogger<SlackNotifier>());
             tasks.Add(SendWithLogging(slackNotifier, notification));
         }
 
-        // Generic Webhook
-        if (config.Webhook.IsConfigured && config.Webhook.Events.Contains(notification.Event))
+        // Determine which Webhook config to use
+        var webhookConfig = useProjectSettings && projectConfig?.Webhook != null
+            ? projectConfig.Webhook
+            : globalConfig.Webhook;
+
+        if (webhookConfig.IsConfigured && webhookConfig.Events.Contains(notification.Event))
         {
             var webhookNotifier = new WebhookNotifier(
                 httpClient,
-                config.Webhook,
+                webhookConfig,
                 _loggerFactory.CreateLogger<WebhookNotifier>());
             tasks.Add(SendWithLogging(webhookNotifier, notification));
         }
@@ -89,8 +105,22 @@ public class NotificationService
         {
             await Task.WhenAll(tasks);
             _logger.LogInformation(
-                "Sent {Count} notifications for {Event} on build {BuildId}",
-                tasks.Count, notification.Event, notification.BuildId);
+                "Sent {Count} notifications for {Event} on build {BuildId} (project-specific: {UseProjectSettings})",
+                tasks.Count, notification.Event, notification.BuildId, useProjectSettings);
+        }
+    }
+
+    private ProjectNotificationConfig? ParseProjectNotificationConfig(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<ProjectNotificationConfig>(json);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -149,7 +179,8 @@ public class NotificationService
         Build build,
         NotificationEvent eventType,
         string projectName,
-        string? triggeredBy = null)
+        string? triggeredBy = null,
+        string? projectNotificationSettingsJson = null)
     {
         TimeSpan? duration = null;
         if (build.StartedAt.HasValue && build.CompletedAt.HasValue)
@@ -164,6 +195,7 @@ public class NotificationService
         return new BuildNotification(
             Event: eventType,
             BuildId: build.Id,
+            ProjectId: build.ProjectId,
             BuildNumber: build.BuildNumber,
             ProjectName: projectName,
             Branch: build.Branch,
@@ -172,7 +204,8 @@ public class NotificationService
             Duration: duration,
             BuildSize: build.BuildSize,
             TriggeredBy: triggeredBy,
-            Timestamp: DateTime.UtcNow
+            Timestamp: DateTime.UtcNow,
+            ProjectNotificationSettingsJson: projectNotificationSettingsJson
         );
     }
 }
