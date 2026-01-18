@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src=".github/Images/icon.png" alt="Lumenvil Logo" width="300">
+
 ![Lumenvil](https://img.shields.io/badge/Lumenvil-Unity%20Build%20Automation-blueviolet?style=for-the-badge)
 
 **Self-hosted Unity build automation system for PC/Steam games**
