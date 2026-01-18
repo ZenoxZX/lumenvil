@@ -11,4 +11,14 @@ public class BuildJob
     public string UnityVersion { get; set; } = string.Empty;
     public string BuildPath { get; set; } = string.Empty;
     public string? GitUrl { get; set; }
+    public Guid? PipelineId { get; set; }
+}
+
+public class PipelineScripts
+{
+    public Guid PipelineId { get; set; }
+    public string PipelineName { get; set; } = string.Empty;
+    public bool HasScripts { get; set; }
+    public string? PreBuildScript { get; set; }
+    public string? PostBuildScript { get; set; }
 }

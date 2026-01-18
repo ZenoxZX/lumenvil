@@ -14,6 +14,9 @@ var host = Host.CreateDefaultBuilder(args)
         var buildOutputBase = context.Configuration["BuildOutputBase"] ?? "./builds";
         var workspacePath = context.Configuration["WorkspacePath"] ?? "./workspace";
 
+        // Derive API URL from Hub URL (remove /hubs/build suffix)
+        var apiBaseUrl = context.Configuration["ApiUrl"] ?? hubUrl.Replace("/hubs/build", "");
+
         // Logging
         services.AddLogging(logging =>
         {
@@ -37,10 +40,17 @@ var host = Host.CreateDefaultBuilder(args)
 
         services.AddSingleton(sp =>
         {
+            var logger = sp.GetRequiredService<ILogger<BackendApiClient>>();
+            return new BackendApiClient(apiBaseUrl, logger);
+        });
+
+        services.AddSingleton(sp =>
+        {
             var logger = sp.GetRequiredService<ILogger<UnityBuildRunner>>();
             var hubClient = sp.GetRequiredService<AgentHubClient>();
             var gitService = sp.GetRequiredService<IGitService>();
-            return new UnityBuildRunner(logger, hubClient, gitService, unityHubPath, buildOutputBase, workspacePath);
+            var apiClient = sp.GetRequiredService<BackendApiClient>();
+            return new UnityBuildRunner(logger, hubClient, gitService, apiClient, unityHubPath, buildOutputBase, workspacePath);
         });
 
         services.AddHostedService(sp =>
@@ -56,6 +66,7 @@ var host = Host.CreateDefaultBuilder(args)
         Console.WriteLine("===========================================");
         Console.WriteLine($"Agent Name: {agentName}");
         Console.WriteLine($"Hub URL: {hubUrl}");
+        Console.WriteLine($"API URL: {apiBaseUrl}");
         Console.WriteLine($"Unity Hub Path: {unityHubPath}");
         Console.WriteLine($"Build Output: {buildOutputBase}");
         Console.WriteLine($"Workspace Path: {workspacePath}");

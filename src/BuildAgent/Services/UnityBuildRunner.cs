@@ -10,14 +10,19 @@ public class UnityBuildRunner
     private readonly ILogger<UnityBuildRunner> _logger;
     private readonly AgentHubClient _hubClient;
     private readonly IGitService _gitService;
+    private readonly BackendApiClient _apiClient;
     private readonly string _unityHubPath;
     private readonly string _buildOutputBase;
     private readonly string _workspacePath;
+
+    private const string PreBuildScriptName = "LumenvilPreBuildProcessor.cs";
+    private const string PostBuildScriptName = "LumenvilPostBuildProcessor.cs";
 
     public UnityBuildRunner(
         ILogger<UnityBuildRunner> logger,
         AgentHubClient hubClient,
         IGitService gitService,
+        BackendApiClient apiClient,
         string? unityHubPath = null,
         string? buildOutputBase = null,
         string? workspacePath = null)
@@ -25,6 +30,7 @@ public class UnityBuildRunner
         _logger = logger;
         _hubClient = hubClient;
         _gitService = gitService;
+        _apiClient = apiClient;
         _unityHubPath = unityHubPath ?? GetDefaultUnityHubPath();
         _buildOutputBase = buildOutputBase ?? "./builds";
         _workspacePath = workspacePath ?? "./workspace";
@@ -44,6 +50,7 @@ public class UnityBuildRunner
         var buildId = job.BuildId;
         var outputPath = Path.Combine(_buildOutputBase, job.ProjectName, $"Build_{job.BuildNumber}");
         var projectPath = job.BuildPath;
+        var pipelineScriptPaths = new List<string>();
 
         try
         {
@@ -78,6 +85,12 @@ public class UnityBuildRunner
                     await _hubClient.AddBuildLogAsync(buildId, "Info", $"Building commit: {commitHash}", "Clone");
                     await _hubClient.UpdateBuildCommitHashAsync(buildId, commitHash);
                 }
+            }
+
+            // Step 1.5: Inject pipeline scripts if pipeline is specified
+            if (job.PipelineId.HasValue)
+            {
+                pipelineScriptPaths = await InjectPipelineScriptsAsync(buildId, job.PipelineId.Value, projectPath, cancellationToken);
             }
 
             // Step 2: Unity build
@@ -182,6 +195,14 @@ public class UnityBuildRunner
             await _hubClient.AddBuildLogAsync(buildId, "Error", $"Build exception: {ex.Message}", "Build");
             await _hubClient.BuildCompletedAsync(buildId, false);
             return false;
+        }
+        finally
+        {
+            // Clean up pipeline scripts
+            if (pipelineScriptPaths.Count > 0)
+            {
+                await CleanupPipelineScriptsAsync(buildId, pipelineScriptPaths);
+            }
         }
     }
 
@@ -343,5 +364,98 @@ public class UnityBuildRunner
             size /= 1024;
         }
         return $"{size:0.##} {sizes[order]}";
+    }
+
+    private async Task<List<string>> InjectPipelineScriptsAsync(Guid buildId, Guid pipelineId, string projectPath, CancellationToken cancellationToken)
+    {
+        var scriptPaths = new List<string>();
+
+        try
+        {
+            await _hubClient.AddBuildLogAsync(buildId, "Info", "Fetching pipeline scripts...", "Build");
+
+            var scripts = await _apiClient.GetPipelineScriptsAsync(pipelineId, cancellationToken);
+            if (scripts == null)
+            {
+                await _hubClient.AddBuildLogAsync(buildId, "Warning", "Could not fetch pipeline scripts, continuing without them", "Build");
+                return scriptPaths;
+            }
+
+            if (!scripts.HasScripts)
+            {
+                await _hubClient.AddBuildLogAsync(buildId, "Info", $"Pipeline '{scripts.PipelineName}' has no scripts to inject", "Build");
+                return scriptPaths;
+            }
+
+            // Find or create Editor folder
+            var editorPath = Path.Combine(projectPath, "Assets", "Editor");
+            if (!Directory.Exists(editorPath))
+            {
+                Directory.CreateDirectory(editorPath);
+                _logger.LogInformation("Created Editor folder at {Path}", editorPath);
+            }
+
+            // Write pre-build script
+            if (!string.IsNullOrEmpty(scripts.PreBuildScript))
+            {
+                var preBuildPath = Path.Combine(editorPath, PreBuildScriptName);
+                await File.WriteAllTextAsync(preBuildPath, scripts.PreBuildScript, cancellationToken);
+                scriptPaths.Add(preBuildPath);
+
+                // Also add .meta file path for cleanup
+                scriptPaths.Add(preBuildPath + ".meta");
+
+                _logger.LogInformation("Wrote pre-build script to {Path}", preBuildPath);
+                await _hubClient.AddBuildLogAsync(buildId, "Info", "Injected pre-build pipeline script", "Build");
+            }
+
+            // Write post-build script
+            if (!string.IsNullOrEmpty(scripts.PostBuildScript))
+            {
+                var postBuildPath = Path.Combine(editorPath, PostBuildScriptName);
+                await File.WriteAllTextAsync(postBuildPath, scripts.PostBuildScript, cancellationToken);
+                scriptPaths.Add(postBuildPath);
+
+                // Also add .meta file path for cleanup
+                scriptPaths.Add(postBuildPath + ".meta");
+
+                _logger.LogInformation("Wrote post-build script to {Path}", postBuildPath);
+                await _hubClient.AddBuildLogAsync(buildId, "Info", "Injected post-build pipeline script", "Build");
+            }
+
+            await _hubClient.AddBuildLogAsync(buildId, "Info", $"Pipeline '{scripts.PipelineName}' scripts injected successfully", "Build");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to inject pipeline scripts");
+            await _hubClient.AddBuildLogAsync(buildId, "Warning", $"Failed to inject pipeline scripts: {ex.Message}", "Build");
+        }
+
+        return scriptPaths;
+    }
+
+    private async Task CleanupPipelineScriptsAsync(Guid buildId, List<string> scriptPaths)
+    {
+        try
+        {
+            foreach (var path in scriptPaths)
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    _logger.LogInformation("Deleted pipeline script: {Path}", path);
+                }
+            }
+
+            if (scriptPaths.Count > 0)
+            {
+                await _hubClient.AddBuildLogAsync(buildId, "Info", "Pipeline scripts cleaned up", "Build");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to clean up some pipeline scripts");
+            await _hubClient.AddBuildLogAsync(buildId, "Warning", $"Failed to clean up pipeline scripts: {ex.Message}", "Build");
+        }
     }
 }
