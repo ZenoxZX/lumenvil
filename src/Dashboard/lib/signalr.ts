@@ -112,9 +112,9 @@ export async function connectToHub(): Promise<void> {
     console.log('SignalR connected');
     connectionPromise = null;
   }).catch((err) => {
-    console.error('SignalR connection failed:', err);
+    console.warn('SignalR connection failed (backend may be offline):', err.message || err);
     connectionPromise = null;
-    throw err;
+    // Don't throw - allow the app to work without real-time updates
   });
 
   return connectionPromise;

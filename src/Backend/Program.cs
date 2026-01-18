@@ -83,13 +83,6 @@ builder.Services.AddHostedService(provider => provider.GetRequiredService<BuildQ
 // Settings & Platform Services
 builder.Services.AddSingleton<SettingsService>();
 builder.Services.AddSingleton<PlatformUploaderFactory>();
-builder.Services.AddSingleton(sp =>
-{
-    var settingsService = sp.GetRequiredService<SettingsService>();
-    var config = settingsService.GetSteamConfigAsync().GetAwaiter().GetResult();
-    var logger = sp.GetRequiredService<ILogger<SteamUploader>>();
-    return new SteamUploader(logger, config);
-});
 
 // CORS
 builder.Services.AddCors(options =>

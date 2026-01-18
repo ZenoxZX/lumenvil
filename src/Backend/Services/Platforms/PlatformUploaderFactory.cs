@@ -5,40 +5,35 @@ namespace Backend.Services.Platforms;
 
 public class PlatformUploaderFactory
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly SettingsService _settingsService;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<PlatformUploaderFactory> _logger;
 
     public PlatformUploaderFactory(
-        IServiceProvider serviceProvider,
+        SettingsService settingsService,
+        ILoggerFactory loggerFactory,
         ILogger<PlatformUploaderFactory> logger)
     {
-        _serviceProvider = serviceProvider;
+        _settingsService = settingsService;
+        _loggerFactory = loggerFactory;
         _logger = logger;
     }
 
-    public IPlatformUploader? GetUploader(PlatformType platform)
+    public async Task<IPlatformUploader?> GetUploaderAsync(PlatformType platform)
     {
         return platform switch
         {
-            PlatformType.Steam => _serviceProvider.GetService<SteamUploader>(),
+            PlatformType.Steam => await CreateSteamUploaderAsync(),
             PlatformType.Epic => null, // Not implemented yet
             _ => null
         };
     }
 
-    public IEnumerable<IPlatformUploader> GetAllUploaders()
+    private async Task<SteamUploader> CreateSteamUploaderAsync()
     {
-        var uploaders = new List<IPlatformUploader>();
-
-        var steamUploader = _serviceProvider.GetService<SteamUploader>();
-        if (steamUploader != null)
-        {
-            uploaders.Add(steamUploader);
-        }
-
-        // Add more uploaders here as they are implemented
-
-        return uploaders;
+        var config = await _settingsService.GetSteamConfigAsync();
+        var logger = _loggerFactory.CreateLogger<SteamUploader>();
+        return new SteamUploader(logger, config);
     }
 
     public IEnumerable<PlatformType> GetSupportedPlatforms()

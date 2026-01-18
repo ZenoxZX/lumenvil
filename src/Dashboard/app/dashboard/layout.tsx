@@ -45,7 +45,9 @@ export default function DashboardLayout({
     }
 
     setUser(getUser());
-    connectToHub().catch(console.error);
+    connectToHub().catch(() => {
+      // SignalR connection is optional - app works without real-time updates
+    });
 
     return () => {
       disconnectFromHub().catch(console.error);
