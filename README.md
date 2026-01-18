@@ -22,12 +22,12 @@
 
 ## Overview
 
-Lumenvil is a complete build automation solution designed for game development teams. Run Unity builds on a dedicated Windows machine, monitor progress in real-time from any device, and deploy directly to Steam.
+Lumenvil is a complete build automation solution designed for game development teams. Run Unity builds on a dedicated machine, monitor progress in real-time from any device, and deploy directly to Steam.
 
 ```
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
 │  Dashboard  │◄────►│   Backend   │◄────►│ Build Agent │
-│  (Next.js)  │      │  (.NET API) │      │  (Windows)  │
+│  (Next.js)  │      │  (.NET API) │      │ (Win/Mac/Linux)
 └─────────────┘      └─────────────┘      └─────────────┘
      Any Device         SignalR              Unity + Steam
 ```
@@ -38,9 +38,24 @@ Lumenvil is a complete build automation solution designed for game development t
 
 ### Build Automation
 - **IL2CPP & Mono** scripting backend support
-- **Git integration** with branch selection
-- **Build templates** for quick, repeatable builds
+- **Git integration** with branch selection and commit tracking
+- **Cross-platform** build agent (Windows, macOS, Linux)
 - **Queue system** for managing multiple builds
+
+### Build Pipelines
+- **Pre-build processes** - run tasks before Unity starts building
+- **Post-build processes** - run tasks after build completes
+- **Define symbols** - add or remove scripting defines per build
+- **Player settings** - modify company name, version, screen settings
+- **Scene list** - configure which scenes to include
+- **Custom code** - execute C# scripts during build
+- **Shell commands** - run external scripts or commands
+- **File operations** - copy/move files as part of the pipeline
+
+### Build Templates
+- **Save configurations** as reusable templates
+- **Quick builds** - start builds with one click
+- **Branch + backend + pipeline** combinations saved
 
 ### Real-time Monitoring
 - **Live build logs** streaming via SignalR
@@ -68,7 +83,7 @@ Lumenvil is a complete build automation solution designed for game development t
 ### User Management
 - **Role-based access**: Admin, Developer, Viewer
 - **JWT authentication**
-- **User invitation** system
+- **User invitation system**
 
 ---
 
@@ -78,7 +93,7 @@ Lumenvil is a complete build automation solution designed for game development t
 |-----------|------------|
 | **Backend** | .NET 6 Web API, SignalR, Entity Framework Core |
 | **Dashboard** | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui |
-| **Build Agent** | .NET 6 Background Service |
+| **Build Agent** | .NET 6 Console App (cross-platform) |
 | **Database** | SQLite |
 | **Real-time** | SignalR WebSockets |
 
@@ -120,7 +135,7 @@ cd src/Backend && dotnet run
 # Terminal 2: Dashboard
 cd src/Dashboard && npm run dev
 
-# Terminal 3: Build Agent (Windows)
+# Terminal 3: Build Agent
 cd src/BuildAgent && dotnet run
 ```
 
@@ -138,21 +153,42 @@ Default credentials:
 ```
 lumenvil/
 ├── src/
-│   ├── Backend/           # .NET Web API
-│   │   ├── Controllers/   # REST endpoints
-│   │   ├── Hubs/          # SignalR hub
-│   │   ├── Models/        # Data models
-│   │   └── Services/      # Business logic
+│   ├── Backend/              # .NET Web API
+│   │   ├── Controllers/      # REST endpoints
+│   │   │   ├── AuthController.cs
+│   │   │   ├── BuildController.cs
+│   │   │   ├── BuildTemplateController.cs
+│   │   │   ├── GitController.cs
+│   │   │   ├── PipelineController.cs
+│   │   │   ├── ProjectController.cs
+│   │   │   ├── SettingsController.cs
+│   │   │   └── UserController.cs
+│   │   ├── Hubs/             # SignalR hub
+│   │   ├── Models/           # Data models
+│   │   └── Services/
+│   │       ├── Notifications/  # Discord, Slack, Webhooks
+│   │       └── Platforms/      # Steam uploader
 │   │
-│   ├── BuildAgent/        # Windows build service
-│   │   └── Services/      # Git, Unity, Upload
+│   ├── BuildAgent/           # Cross-platform build service
+│   │   └── Services/
+│   │       ├── UnityBuildRunner.cs
+│   │       ├── GitService.cs
+│   │       └── AgentHubClient.cs
 │   │
-│   └── Dashboard/         # Next.js frontend
-│       ├── app/           # Pages (App Router)
-│       ├── components/    # UI components
-│       └── lib/           # Utilities
+│   └── Dashboard/            # Next.js frontend
+│       ├── app/
+│       │   └── dashboard/
+│       │       ├── builds/
+│       │       ├── pipelines/
+│       │       ├── projects/
+│       │       ├── settings/
+│       │       ├── templates/
+│       │       └── users/
+│       ├── components/
+│       └── lib/
 │
-└── start.sh               # Development startup script
+├── database/                 # SQLite database
+└── start.sh                  # Development startup script
 ```
 
 ---
@@ -170,18 +206,26 @@ JWT_AUDIENCE=Lumenvil
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change-this-password
 ADMIN_EMAIL=admin@example.com
+
+# Database
+DATABASE_PATH=../database/buildautomation.db
 ```
 
 ### Build Agent (appsettings.json)
 ```json
 {
   "HubUrl": "http://localhost:5000/hubs/build",
-  "AgentName": "windows-builder",
+  "AgentName": "build-agent-01",
   "UnityHubPath": "C:\\Program Files\\Unity\\Hub\\Editor",
   "BuildOutputBase": "./builds",
   "WorkspacePath": "./workspace"
 }
 ```
+
+Unity Hub paths by platform:
+- **Windows**: `C:\Program Files\Unity\Hub\Editor`
+- **macOS**: `/Applications/Unity/Hub/Editor`
+- **Linux**: `~/Unity/Hub/Editor`
 
 ---
 
@@ -201,18 +245,57 @@ Open ports 3000 (Dashboard) and 5000 (API) on your router.
 
 ---
 
-## API Endpoints
+## API Reference
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/auth/login` | User authentication |
-| `GET /api/project` | List projects |
-| `POST /api/build` | Start new build |
-| `GET /api/build/{id}` | Build details + logs |
-| `POST /api/build/{id}/cancel` | Cancel build |
-| `GET /api/settings/steam` | Steam configuration |
-| `GET /api/settings/cleanup` | Cleanup settings |
-| `GET /api/settings/disk` | Disk space info |
+### Authentication
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/login` | POST | User login |
+
+### Projects
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/project` | GET | List all projects |
+| `/api/project` | POST | Create project |
+| `/api/project/{id}` | GET | Get project details |
+| `/api/project/{id}` | PUT | Update project |
+| `/api/project/{id}` | DELETE | Delete project |
+
+### Builds
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/build` | GET | List builds |
+| `/api/build` | POST | Start new build |
+| `/api/build/{id}` | GET | Get build details + logs |
+| `/api/build/{id}/cancel` | POST | Cancel build |
+
+### Build Templates
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/buildtemplate` | GET | List templates |
+| `/api/buildtemplate` | POST | Create template |
+| `/api/buildtemplate/{id}/build` | POST | Start build from template |
+
+### Pipelines
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/pipeline` | GET | List pipelines |
+| `/api/pipeline` | POST | Create pipeline |
+| `/api/pipeline/{id}` | GET | Get pipeline details |
+| `/api/pipeline/{id}/processes` | POST | Add process to pipeline |
+
+### Settings
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/settings/steam` | GET/PUT | Steam configuration |
+| `/api/settings/cleanup` | GET/PUT | Cleanup settings |
+| `/api/settings/disk` | GET | Disk space info |
+| `/api/settings/notifications` | GET/PUT | Notification settings |
+
+### Git
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/git/branches` | GET | List branches for repository |
 
 Full API documentation available at `/swagger` when running in development.
 
@@ -225,6 +308,7 @@ Full API documentation available at `/swagger` when running in development.
 - [ ] Build analytics & statistics
 - [ ] Windows Service installer
 - [ ] Docker deployment
+- [ ] macOS/Linux builds (currently agent supports all platforms)
 
 ---
 
