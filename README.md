@@ -34,6 +34,54 @@ Lumenvil is a complete build automation solution designed for game development t
 
 ---
 
+## Screenshots
+
+> **[View Full Dashboard Guide with all screenshots](docs/DASHBOARD_GUIDE.md)**
+
+<details>
+<summary><b>Dashboard Overview</b> - Monitor all your builds at a glance</summary>
+<br>
+<img src=".github/Images/ss/01-dashboard-overview.png" alt="Dashboard Overview">
+</details>
+
+<details>
+<summary><b>Live Build Logs</b> - Real-time progress tracking with stage indicators</summary>
+<br>
+<img src=".github/Images/ss/04-build-detail-live-logs.png" alt="Build Detail with Live Logs">
+</details>
+
+<details>
+<summary><b>Build Pipelines</b> - Configure pre-build and post-build processes</summary>
+<br>
+<img src=".github/Images/ss/18-pipeline-with-processes.png" alt="Pipeline with Processes">
+</details>
+
+<details>
+<summary><b>Pipeline Script Preview</b> - Auto-generated Unity scripts for your pipeline</summary>
+<br>
+<img src=".github/Images/ss/15-pipeline-preview-prebuild.png" alt="Pipeline Script Preview">
+</details>
+
+<details>
+<summary><b>Steam Integration</b> - Configure SteamCMD for automatic uploads</summary>
+<br>
+<img src=".github/Images/ss/20-settings-steam.png" alt="Steam Settings">
+</details>
+
+<details>
+<summary><b>Notifications</b> - Discord, Slack, and custom webhook support</summary>
+<br>
+<img src=".github/Images/ss/21-settings-notifications.png" alt="Notification Settings">
+</details>
+
+<details>
+<summary><b>Storage Management</b> - Disk space monitoring and automatic cleanup</summary>
+<br>
+<img src=".github/Images/ss/22-settings-cleanup-disk.png" alt="Cleanup and Disk Space">
+</details>
+
+---
+
 ## Features
 
 ### Build Automation
