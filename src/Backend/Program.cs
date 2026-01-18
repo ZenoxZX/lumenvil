@@ -89,6 +89,10 @@ builder.Services.AddSingleton<PlatformUploaderFactory>();
 builder.Services.AddHttpClient("notifications");
 builder.Services.AddSingleton<NotificationService>();
 
+// Build Cleanup Service
+builder.Services.AddSingleton<BuildCleanupService>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<BuildCleanupService>());
+
 // CORS
 builder.Services.AddCors(options =>
 {

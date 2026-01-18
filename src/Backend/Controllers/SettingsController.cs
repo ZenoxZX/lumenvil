@@ -15,17 +15,20 @@ public class SettingsController : ControllerBase
 {
     private readonly SettingsService _settingsService;
     private readonly NotificationService _notificationService;
+    private readonly BuildCleanupService _cleanupService;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<SettingsController> _logger;
 
     public SettingsController(
         SettingsService settingsService,
         NotificationService notificationService,
+        BuildCleanupService cleanupService,
         IServiceProvider serviceProvider,
         ILogger<SettingsController> logger)
     {
         _settingsService = settingsService;
         _notificationService = notificationService;
+        _cleanupService = cleanupService;
         _serviceProvider = serviceProvider;
         _logger = logger;
     }
@@ -216,6 +219,38 @@ public class SettingsController : ControllerBase
         {
             return BadRequest(new { message });
         }
+    }
+
+    // Build Cleanup Settings
+
+    [HttpGet("cleanup")]
+    public async Task<IActionResult> GetCleanupSettings()
+    {
+        var settings = await _cleanupService.GetCleanupSettingsAsync(_settingsService);
+        return Ok(settings);
+    }
+
+    [HttpPut("cleanup")]
+    public async Task<IActionResult> UpdateCleanupSettings([FromBody] CleanupSettings settings)
+    {
+        await _cleanupService.SaveCleanupSettingsAsync(_settingsService, settings);
+        _logger.LogInformation("Cleanup settings updated by admin");
+        return Ok(settings);
+    }
+
+    [HttpPost("cleanup/run")]
+    public async Task<IActionResult> RunCleanup()
+    {
+        _logger.LogInformation("Manual cleanup triggered by admin");
+        var result = await _cleanupService.RunCleanupAsync();
+        return Ok(result);
+    }
+
+    [HttpGet("disk")]
+    public IActionResult GetDiskSpace()
+    {
+        var diskInfo = _cleanupService.GetDiskSpaceInfo();
+        return Ok(diskInfo);
     }
 }
 
