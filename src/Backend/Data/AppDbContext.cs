@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
     public DbSet<Build> Builds => Set<Build>();
     public DbSet<BuildLog> BuildLogs => Set<BuildLog>();
     public DbSet<BuildTemplate> BuildTemplates => Set<BuildTemplate>();
+    public DbSet<BuildPipeline> BuildPipelines => Set<BuildPipeline>();
+    public DbSet<BuildProcess> BuildProcesses => Set<BuildProcess>();
     public DbSet<Setting> Settings => Set<Setting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -79,6 +81,33 @@ public class AppDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.CreatedById)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<BuildPipeline>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Name);
+
+            entity.HasOne(e => e.Project)
+                .WithMany()
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<BuildProcess>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.PipelineId, e.Order });
+
+            entity.HasOne(e => e.Pipeline)
+                .WithMany(p => p.Processes)
+                .HasForeignKey(e => e.PipelineId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
