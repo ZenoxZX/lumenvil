@@ -7,6 +7,7 @@ using Backend.Data;
 using Backend.Hubs;
 using Backend.Models;
 using Backend.Services;
+using Backend.Services.Notifications;
 using Backend.Services.Platforms;
 using Backend.Services.Platforms.Steam;
 using DotNetEnv;
@@ -83,6 +84,10 @@ builder.Services.AddHostedService(provider => provider.GetRequiredService<BuildQ
 // Settings & Platform Services
 builder.Services.AddSingleton<SettingsService>();
 builder.Services.AddSingleton<PlatformUploaderFactory>();
+
+// Notification Services
+builder.Services.AddHttpClient("notifications");
+builder.Services.AddSingleton<NotificationService>();
 
 // CORS
 builder.Services.AddCors(options =>

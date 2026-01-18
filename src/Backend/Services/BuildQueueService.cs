@@ -5,6 +5,7 @@ using Backend.Data;
 using Backend.Hubs;
 using Backend.Models;
 using Backend.Models.DTOs;
+using Backend.Services.Notifications;
 
 namespace Backend.Services;
 
@@ -12,16 +13,19 @@ public class BuildQueueService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHubContext<BuildHub> _hubContext;
+    private readonly NotificationService _notificationService;
     private readonly Channel<Guid> _buildQueue;
     private readonly ILogger<BuildQueueService> _logger;
 
     public BuildQueueService(
         IServiceScopeFactory scopeFactory,
         IHubContext<BuildHub> hubContext,
+        NotificationService notificationService,
         ILogger<BuildQueueService> logger)
     {
         _scopeFactory = scopeFactory;
         _hubContext = hubContext;
+        _notificationService = notificationService;
         _logger = logger;
         _buildQueue = Channel.CreateUnbounded<Guid>();
     }
@@ -150,9 +154,13 @@ public class BuildQueueService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var build = await context.Builds.FindAsync(buildId);
+        var build = await context.Builds
+            .Include(b => b.Project)
+            .Include(b => b.TriggeredBy)
+            .FirstOrDefaultAsync(b => b.Id == buildId);
         if (build == null) return;
 
+        var previousStatus = build.Status;
         build.Status = status;
         if (errorMessage != null) build.ErrorMessage = errorMessage;
 
@@ -174,6 +182,39 @@ public class BuildQueueService : BackgroundService
             Status = status.ToString(),
             ErrorMessage = errorMessage
         });
+
+        // Send notifications for relevant status changes
+        await SendBuildNotificationAsync(build, previousStatus, status);
+    }
+
+    private async Task SendBuildNotificationAsync(Build build, BuildStatus previousStatus, BuildStatus newStatus)
+    {
+        NotificationEvent? eventType = newStatus switch
+        {
+            BuildStatus.Cloning when previousStatus == BuildStatus.Queued => NotificationEvent.BuildStarted,
+            BuildStatus.Success => NotificationEvent.BuildCompleted,
+            BuildStatus.Failed => NotificationEvent.BuildFailed,
+            BuildStatus.Cancelled => NotificationEvent.BuildCancelled,
+            _ => null
+        };
+
+        if (eventType == null) return;
+
+        try
+        {
+            var notification = NotificationService.CreateFromBuild(
+                build,
+                eventType.Value,
+                build.Project.Name,
+                build.TriggeredBy?.Username
+            );
+
+            await _notificationService.SendNotificationAsync(notification);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send notification for build {BuildId}", build.Id);
+        }
     }
 
     public async Task AddBuildLogAsync(Guid buildId, Models.LogLevel level, string message, BuildStage stage)
