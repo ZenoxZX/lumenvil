@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Project } from '@/types';
+import { Project, NotificationEvent } from '@/types';
 import { getProject, updateProject, getGitBranches } from '@/lib/api';
+import { Checkbox } from '@/components/ui/checkbox';
 import { hasRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
-import { ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Loader2, Bell, MessageSquare, Webhook } from 'lucide-react';
 
 export default function EditProjectPage() {
   const router = useRouter();
@@ -51,6 +52,34 @@ export default function EditProjectPage() {
     isActive: true,
   });
 
+  // Notification settings
+  const [useGlobalSettings, setUseGlobalSettings] = useState(true);
+  const [discordForm, setDiscordForm] = useState({
+    enabled: false,
+    webhookUrl: '',
+    events: [] as NotificationEvent[],
+  });
+  const [slackForm, setSlackForm] = useState({
+    enabled: false,
+    webhookUrl: '',
+    events: [] as NotificationEvent[],
+  });
+  const [webhookForm, setWebhookForm] = useState({
+    enabled: false,
+    url: '',
+    secret: '',
+    events: [] as NotificationEvent[],
+  });
+
+  const allEvents: { value: NotificationEvent; label: string }[] = [
+    { value: 'BuildStarted', label: 'Build Started' },
+    { value: 'BuildCompleted', label: 'Build Completed' },
+    { value: 'BuildFailed', label: 'Build Failed' },
+    { value: 'BuildCancelled', label: 'Build Cancelled' },
+    { value: 'UploadCompleted', label: 'Upload Completed' },
+    { value: 'UploadFailed', label: 'Upload Failed' },
+  ];
+
   useEffect(() => {
     if (!hasRole('Developer')) {
       router.push('/dashboard/projects');
@@ -71,6 +100,33 @@ export default function EditProjectPage() {
           steamDepotId: project.steamDepotId || '',
           isActive: project.isActive,
         });
+
+        // Load notification settings
+        if (project.notificationSettings) {
+          setUseGlobalSettings(project.notificationSettings.useGlobalSettings);
+          if (project.notificationSettings.discord) {
+            setDiscordForm({
+              enabled: project.notificationSettings.discord.enabled,
+              webhookUrl: project.notificationSettings.discord.webhookUrl || '',
+              events: project.notificationSettings.discord.events || [],
+            });
+          }
+          if (project.notificationSettings.slack) {
+            setSlackForm({
+              enabled: project.notificationSettings.slack.enabled,
+              webhookUrl: project.notificationSettings.slack.webhookUrl || '',
+              events: project.notificationSettings.slack.events || [],
+            });
+          }
+          if (project.notificationSettings.webhook) {
+            setWebhookForm({
+              enabled: project.notificationSettings.webhook.enabled,
+              url: project.notificationSettings.webhook.url || '',
+              secret: '',
+              events: project.notificationSettings.webhook.events || [],
+            });
+          }
+        }
 
         // Load branches if gitUrl exists
         if (project.gitUrl) {
@@ -118,9 +174,51 @@ export default function EditProjectPage() {
     }
   };
 
+  const toggleDiscordEvent = (event: NotificationEvent) => {
+    const events = discordForm.events.includes(event)
+      ? discordForm.events.filter((e) => e !== event)
+      : [...discordForm.events, event];
+    setDiscordForm({ ...discordForm, events });
+  };
+
+  const toggleSlackEvent = (event: NotificationEvent) => {
+    const events = slackForm.events.includes(event)
+      ? slackForm.events.filter((e) => e !== event)
+      : [...slackForm.events, event];
+    setSlackForm({ ...slackForm, events });
+  };
+
+  const toggleWebhookEvent = (event: NotificationEvent) => {
+    const events = webhookForm.events.includes(event)
+      ? webhookForm.events.filter((e) => e !== event)
+      : [...webhookForm.events, event];
+    setWebhookForm({ ...webhookForm, events });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+
+    // Build notification settings
+    const notificationSettings = {
+      useGlobalSettings,
+      discord: !useGlobalSettings ? {
+        enabled: discordForm.enabled,
+        webhookUrl: discordForm.webhookUrl || undefined,
+        events: discordForm.events,
+      } : undefined,
+      slack: !useGlobalSettings ? {
+        enabled: slackForm.enabled,
+        webhookUrl: slackForm.webhookUrl || undefined,
+        events: slackForm.events,
+      } : undefined,
+      webhook: !useGlobalSettings ? {
+        enabled: webhookForm.enabled,
+        url: webhookForm.url || undefined,
+        secret: webhookForm.secret || undefined,
+        events: webhookForm.events,
+      } : undefined,
+    };
 
     try {
       await updateProject(projectId, {
@@ -132,6 +230,7 @@ export default function EditProjectPage() {
         buildPath: formData.buildPath,
         steamAppId: formData.steamAppId || undefined,
         steamDepotId: formData.steamDepotId || undefined,
+        notificationSettings,
       });
 
       toast({
@@ -324,6 +423,193 @@ export default function EditProjectPage() {
                   onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
                 />
               </div>
+            </div>
+
+            {/* Notification Settings */}
+            <div className="border-t pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Bell className="h-5 w-5" />
+                <h3 className="text-lg font-medium">Notification Settings</h3>
+              </div>
+
+              <div className="flex items-center justify-between mb-6">
+                <div className="space-y-0.5">
+                  <Label>Use Global Settings</Label>
+                  <p className="text-xs text-muted-foreground">
+                    When enabled, uses system-wide notification settings
+                  </p>
+                </div>
+                <Switch
+                  checked={useGlobalSettings}
+                  onCheckedChange={setUseGlobalSettings}
+                />
+              </div>
+
+              {!useGlobalSettings && (
+                <div className="space-y-6">
+                  {/* Discord */}
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-[#5865F2]" />
+                        <Label className="font-medium">Discord</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="discord-enabled"
+                          checked={discordForm.enabled}
+                          onCheckedChange={(checked) =>
+                            setDiscordForm({ ...discordForm, enabled: checked === true })
+                          }
+                        />
+                        <Label htmlFor="discord-enabled" className="text-sm">Enabled</Label>
+                      </div>
+                    </div>
+                    {discordForm.enabled && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="discord-webhook" className="text-sm">Webhook URL</Label>
+                          <Input
+                            id="discord-webhook"
+                            value={discordForm.webhookUrl}
+                            onChange={(e) => setDiscordForm({ ...discordForm, webhookUrl: e.target.value })}
+                            placeholder="https://discord.com/api/webhooks/..."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm">Events</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {allEvents.map((event) => (
+                              <div key={event.value} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`discord-${event.value}`}
+                                  checked={discordForm.events.includes(event.value)}
+                                  onCheckedChange={() => toggleDiscordEvent(event.value)}
+                                />
+                                <Label htmlFor={`discord-${event.value}`} className="text-sm">
+                                  {event.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Slack */}
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4 text-[#4A154B]" />
+                        <Label className="font-medium">Slack</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="slack-enabled"
+                          checked={slackForm.enabled}
+                          onCheckedChange={(checked) =>
+                            setSlackForm({ ...slackForm, enabled: checked === true })
+                          }
+                        />
+                        <Label htmlFor="slack-enabled" className="text-sm">Enabled</Label>
+                      </div>
+                    </div>
+                    {slackForm.enabled && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="slack-webhook" className="text-sm">Webhook URL</Label>
+                          <Input
+                            id="slack-webhook"
+                            value={slackForm.webhookUrl}
+                            onChange={(e) => setSlackForm({ ...slackForm, webhookUrl: e.target.value })}
+                            placeholder="https://hooks.slack.com/services/..."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm">Events</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {allEvents.map((event) => (
+                              <div key={event.value} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`slack-${event.value}`}
+                                  checked={slackForm.events.includes(event.value)}
+                                  onCheckedChange={() => toggleSlackEvent(event.value)}
+                                />
+                                <Label htmlFor={`slack-${event.value}`} className="text-sm">
+                                  {event.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Custom Webhook */}
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Webhook className="h-4 w-4" />
+                        <Label className="font-medium">Custom Webhook</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="webhook-enabled"
+                          checked={webhookForm.enabled}
+                          onCheckedChange={(checked) =>
+                            setWebhookForm({ ...webhookForm, enabled: checked === true })
+                          }
+                        />
+                        <Label htmlFor="webhook-enabled" className="text-sm">Enabled</Label>
+                      </div>
+                    </div>
+                    {webhookForm.enabled && (
+                      <>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="webhook-url" className="text-sm">Webhook URL</Label>
+                            <Input
+                              id="webhook-url"
+                              value={webhookForm.url}
+                              onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })}
+                              placeholder="https://your-server.com/webhook"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="webhook-secret" className="text-sm">Secret (Optional)</Label>
+                            <Input
+                              id="webhook-secret"
+                              type="password"
+                              value={webhookForm.secret}
+                              onChange={(e) => setWebhookForm({ ...webhookForm, secret: e.target.value })}
+                              placeholder="HMAC secret"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm">Events</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {allEvents.map((event) => (
+                              <div key={event.value} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`webhook-${event.value}`}
+                                  checked={webhookForm.events.includes(event.value)}
+                                  onCheckedChange={() => toggleWebhookEvent(event.value)}
+                                />
+                                <Label htmlFor={`webhook-${event.value}`} className="text-sm">
+                                  {event.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
