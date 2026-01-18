@@ -5,7 +5,8 @@ public record CreateBuildRequest(
     string? Branch,
     ScriptingBackend ScriptingBackend = ScriptingBackend.IL2CPP,
     bool UploadToSteam = false,
-    string? SteamBranch = null
+    string? SteamBranch = null,
+    Guid? TemplateId = null  // Optional: Create build from template
 );
 
 public record BuildResponse(

@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Build> Builds => Set<Build>();
     public DbSet<BuildLog> BuildLogs => Set<BuildLog>();
+    public DbSet<BuildTemplate> BuildTemplates => Set<BuildTemplate>();
     public DbSet<Setting> Settings => Set<Setting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -62,6 +63,22 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Setting>(entity =>
         {
             entity.HasKey(e => e.Key);
+        });
+
+        modelBuilder.Entity<BuildTemplate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Name);
+
+            entity.HasOne(e => e.Project)
+                .WithMany()
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
