@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Project, ScriptingBackend, BuildTemplate } from '@/types';
-import { getProjects, createBuild, getGitBranches, getSteamSettings, SteamSettings, getBuildTemplates } from '@/lib/api';
+import { Project, ScriptingBackend, BuildTemplate, BuildPipeline } from '@/types';
+import { getProjects, createBuild, getGitBranches, getSteamSettings, SteamSettings, getBuildTemplates, getPipelines } from '@/lib/api';
 import { Checkbox } from '@/components/ui/checkbox';
 import { hasRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,8 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
   const [steamBranch, setSteamBranch] = useState('default');
   const [templates, setTemplates] = useState<BuildTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [pipelines, setPipelines] = useState<BuildPipeline[]>([]);
+  const [selectedPipeline, setSelectedPipeline] = useState<string>('');
 
   const canCreateBuild = mounted && hasRole('Developer');
   const selectedProjectData = projects.find((p) => p.id === selectedProject);
@@ -95,10 +97,14 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
           if (projectsData[0].gitUrl) {
             await loadBranches(projectsData[0].gitUrl);
           }
-          // Load templates for first project
+          // Load templates and pipelines for first project
           try {
-            const templatesData = await getBuildTemplates(projectsData[0].id);
+            const [templatesData, pipelinesData] = await Promise.all([
+              getBuildTemplates(projectsData[0].id),
+              getPipelines(projectsData[0].id),
+            ]);
             setTemplates(templatesData);
+            setPipelines(pipelinesData);
             const defaultTemplate = templatesData.find((t) => t.isDefault);
             if (defaultTemplate) {
               setSelectedTemplate(defaultTemplate.id);
@@ -107,8 +113,13 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
               if (defaultTemplate.steamBranch) setSteamBranch(defaultTemplate.steamBranch);
               if (defaultTemplate.branch) setBranch(defaultTemplate.branch);
             }
+            // Auto-select default pipeline
+            const defaultPipeline = pipelinesData.find((p) => p.isDefault && p.isActive);
+            if (defaultPipeline) {
+              setSelectedPipeline(defaultPipeline.id);
+            }
           } catch (error) {
-            console.error('Failed to load templates:', error);
+            console.error('Failed to load templates/pipelines:', error);
           }
         } else if (projectId) {
           const project = projectsData.find((p) => p.id === projectId);
@@ -117,10 +128,14 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
             if (project.gitUrl) {
               await loadBranches(project.gitUrl);
             }
-            // Load templates for this project
+            // Load templates and pipelines for this project
             try {
-              const templatesData = await getBuildTemplates(projectId);
+              const [templatesData, pipelinesData] = await Promise.all([
+                getBuildTemplates(projectId),
+                getPipelines(projectId),
+              ]);
               setTemplates(templatesData);
+              setPipelines(pipelinesData);
               const defaultTemplate = templatesData.find((t) => t.isDefault);
               if (defaultTemplate) {
                 setSelectedTemplate(defaultTemplate.id);
@@ -129,8 +144,13 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
                 if (defaultTemplate.steamBranch) setSteamBranch(defaultTemplate.steamBranch);
                 if (defaultTemplate.branch) setBranch(defaultTemplate.branch);
               }
+              // Auto-select default pipeline
+              const defaultPipeline = pipelinesData.find((p) => p.isDefault && p.isActive);
+              if (defaultPipeline) {
+                setSelectedPipeline(defaultPipeline.id);
+              }
             } catch (error) {
-              console.error('Failed to load templates:', error);
+              console.error('Failed to load templates/pipelines:', error);
             }
           }
         }
@@ -144,6 +164,7 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
   const handleProjectChange = async (value: string) => {
     setSelectedProject(value);
     setSelectedTemplate('');
+    setSelectedPipeline('');
     const project = projects.find((p) => p.id === value);
     if (project) {
       setBranch(project.defaultBranch);
@@ -151,18 +172,28 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
       if (project.gitUrl) {
         await loadBranches(project.gitUrl);
       }
-      // Load templates for this project
+      // Load templates and pipelines for this project
       try {
-        const templatesData = await getBuildTemplates(value);
+        const [templatesData, pipelinesData] = await Promise.all([
+          getBuildTemplates(value),
+          getPipelines(value),
+        ]);
         setTemplates(templatesData);
+        setPipelines(pipelinesData);
         // Auto-select default template if exists
         const defaultTemplate = templatesData.find((t) => t.isDefault);
         if (defaultTemplate) {
           applyTemplate(defaultTemplate);
         }
+        // Auto-select default pipeline if exists
+        const defaultPipeline = pipelinesData.find((p) => p.isDefault && p.isActive);
+        if (defaultPipeline) {
+          setSelectedPipeline(defaultPipeline.id);
+        }
       } catch (error) {
-        console.error('Failed to load templates:', error);
+        console.error('Failed to load templates/pipelines:', error);
         setTemplates([]);
+        setPipelines([]);
       }
     }
   };
@@ -221,6 +252,7 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
         uploadToSteam: uploadToSteam && !!canUploadToSteam,
         steamBranch: uploadToSteam && !!canUploadToSteam ? steamBranch : undefined,
         templateId: selectedTemplate || undefined,
+        pipelineId: selectedPipeline || undefined,
       });
       toast({
         title: 'Build Started',
@@ -291,6 +323,31 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {pipelines.filter((p) => p.isActive).length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="pipeline">Pipeline (Optional)</Label>
+              <Select
+                value={selectedPipeline || '__none__'}
+                onValueChange={(value) => setSelectedPipeline(value === '__none__' ? '' : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a pipeline" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No pipeline</SelectItem>
+                  {pipelines.filter((p) => p.isActive).map((pipeline) => (
+                    <SelectItem key={pipeline.id} value={pipeline.id}>
+                      {pipeline.name} {pipeline.isDefault && '(Default)'} ({pipeline.processCount} processes)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Pipelines run custom processes during the build
+              </p>
             </div>
           )}
 

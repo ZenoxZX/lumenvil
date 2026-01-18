@@ -16,6 +16,13 @@ import {
   CleanupSettings,
   DiskSpaceInfo,
   CleanupResult,
+  BuildPipeline,
+  BuildPipelineDetail,
+  BuildProcess,
+  CreatePipelineRequest,
+  CreateProcessRequest,
+  ProcessTypeInfo,
+  PipelineScripts,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -368,4 +375,77 @@ export async function runCleanup(): Promise<CleanupResult> {
 
 export async function getDiskSpace(): Promise<DiskSpaceInfo> {
   return fetchApi<DiskSpaceInfo>('/settings/disk');
+}
+
+// Build Pipelines
+export async function getPipelines(projectId?: string): Promise<BuildPipeline[]> {
+  const params = projectId ? `?projectId=${projectId}` : '';
+  return fetchApi<BuildPipeline[]>(`/pipeline${params}`);
+}
+
+export async function getPipeline(id: string): Promise<BuildPipelineDetail> {
+  return fetchApi<BuildPipelineDetail>(`/pipeline/${id}`);
+}
+
+export async function createPipeline(data: CreatePipelineRequest): Promise<BuildPipeline> {
+  return fetchApi<BuildPipeline>('/pipeline', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updatePipeline(
+  id: string,
+  data: Partial<CreatePipelineRequest & { isActive?: boolean }>
+): Promise<BuildPipeline> {
+  return fetchApi<BuildPipeline>(`/pipeline/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deletePipeline(id: string): Promise<void> {
+  return fetchApi<void>(`/pipeline/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// Pipeline Processes
+export async function addProcess(pipelineId: string, data: CreateProcessRequest): Promise<BuildProcess> {
+  return fetchApi<BuildProcess>(`/pipeline/${pipelineId}/process`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateProcess(
+  pipelineId: string,
+  processId: string,
+  data: Partial<CreateProcessRequest & { isEnabled?: boolean }>
+): Promise<BuildProcess> {
+  return fetchApi<BuildProcess>(`/pipeline/${pipelineId}/process/${processId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteProcess(pipelineId: string, processId: string): Promise<void> {
+  return fetchApi<void>(`/pipeline/${pipelineId}/process/${processId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function reorderProcesses(pipelineId: string, processIds: string[]): Promise<void> {
+  return fetchApi<void>(`/pipeline/${pipelineId}/reorder`, {
+    method: 'PUT',
+    body: JSON.stringify({ processIds }),
+  });
+}
+
+export async function getProcessTypes(): Promise<ProcessTypeInfo[]> {
+  return fetchApi<ProcessTypeInfo[]>('/pipeline/types');
+}
+
+export async function getPipelineScripts(pipelineId: string): Promise<PipelineScripts> {
+  return fetchApi<PipelineScripts>(`/pipeline/${pipelineId}/scripts`);
 }

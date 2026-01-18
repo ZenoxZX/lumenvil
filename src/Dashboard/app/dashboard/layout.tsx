@@ -14,6 +14,7 @@ import {
   Settings,
   Users,
   FileCode,
+  Workflow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BuildNotifications } from '@/components/BuildNotifications';
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Builds', href: '/dashboard/builds', icon: Hammer },
   { name: 'Projects', href: '/dashboard/projects', icon: FolderKanban },
   { name: 'Templates', href: '/dashboard/templates', icon: FileCode },
+  { name: 'Pipelines', href: '/dashboard/pipelines', icon: Workflow },
   { name: 'Users', href: '/dashboard/users', icon: Users, adminOnly: true },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings, adminOnly: true },
 ];

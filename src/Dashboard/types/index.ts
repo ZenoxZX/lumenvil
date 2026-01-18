@@ -126,6 +126,7 @@ export interface CreateBuildRequest {
   uploadToSteam?: boolean;
   steamBranch?: string;
   templateId?: string;
+  pipelineId?: string;
 }
 
 export interface CreateProjectRequest {
@@ -236,4 +237,86 @@ export interface CleanupResult {
   deletedBuilds: string[];
   errors: string[];
   executedAt: string;
+}
+
+// Build Pipeline
+export type ProcessType =
+  | 'DefineSymbols'
+  | 'PlayerSettings'
+  | 'SceneList'
+  | 'CustomCode'
+  | 'ShellCommand'
+  | 'FileCopy'
+  | 'AssetSettings';
+
+export type BuildPhase = 'PreBuild' | 'PostBuild';
+
+export interface BuildPipeline {
+  id: string;
+  name: string;
+  description?: string;
+  projectId?: string;
+  projectName?: string;
+  isDefault: boolean;
+  isActive: boolean;
+  processCount: number;
+  createdAt: string;
+  createdByUsername?: string;
+}
+
+export interface BuildPipelineDetail {
+  id: string;
+  name: string;
+  description?: string;
+  projectId?: string;
+  projectName?: string;
+  isDefault: boolean;
+  isActive: boolean;
+  processes: BuildProcess[];
+  createdAt: string;
+  updatedAt?: string;
+  createdByUsername?: string;
+}
+
+export interface BuildProcess {
+  id: string;
+  pipelineId: string;
+  name: string;
+  type: ProcessType;
+  phase: BuildPhase;
+  order: number;
+  configuration: Record<string, unknown>;
+  isEnabled: boolean;
+  createdAt: string;
+}
+
+export interface CreatePipelineRequest {
+  name: string;
+  description?: string;
+  projectId?: string;
+  isDefault?: boolean;
+}
+
+export interface CreateProcessRequest {
+  name: string;
+  type: ProcessType;
+  phase: BuildPhase;
+  order: number;
+  configuration: Record<string, unknown>;
+}
+
+export interface ProcessTypeInfo {
+  type: ProcessType;
+  name: string;
+  description: string;
+  defaultPhase: BuildPhase;
+  defaultConfiguration: Record<string, unknown>;
+}
+
+export interface PipelineScripts {
+  pipelineId: string;
+  pipelineName: string;
+  hasScripts: boolean;
+  preBuildScript?: string;
+  postBuildScript?: string;
 }
