@@ -205,6 +205,159 @@ curl -s -X POST http://localhost:5000/api/build/{BUILD_ID}/upload \
 
 ---
 
+## Phase 7: Webhook & Notifications
+
+### Ön Koşullar
+- Backend çalışıyor
+- Dashboard çalışıyor
+- Admin kullanıcı ile giriş yapılmış
+
+---
+
+### TC-7.1: Discord Webhook Ayarları
+
+**Açıklama:** Discord webhook URL ve event'ler ayarlanabilmeli
+
+**Adımlar:**
+1. Settings sayfasına git
+2. Discord bölümünü bul
+3. "Enabled" checkbox'ını işaretle
+4. Webhook URL'i gir (örn: `https://discord.com/api/webhooks/...`)
+5. İstenen event'leri seç (BuildCompleted, BuildFailed vb.)
+6. "Save" butonuna tıkla
+
+**Beklenen Sonuç:**
+- Ayarlar kaydedilmeli
+- Sayfa yenilendiğinde ayarlar korunmalı
+
+---
+
+### TC-7.2: Discord Test Bildirimi
+
+**Açıklama:** Discord'a test bildirimi gönderilebilmeli
+
+**Ön Koşul:** Discord webhook ayarlanmış olmalı
+
+**Adımlar:**
+1. Settings sayfasına git
+2. Discord bölümünde "Send Test" butonuna tıkla
+
+**Beklenen Sonuç:**
+- Discord kanalına test mesajı gelmeli
+- Toast mesajı "Test Sent" göstermeli
+
+---
+
+### TC-7.3: Slack Webhook Ayarları
+
+**Açıklama:** Slack webhook URL ve event'ler ayarlanabilmeli
+
+**Adımlar:**
+1. Settings sayfasına git
+2. Slack bölümünü bul
+3. "Enabled" checkbox'ını işaretle
+4. Webhook URL'i gir (örn: `https://hooks.slack.com/services/...`)
+5. İstenen event'leri seç
+6. "Save" butonuna tıkla
+
+**Beklenen Sonuç:**
+- Ayarlar kaydedilmeli
+- Sayfa yenilendiğinde ayarlar korunmalı
+
+---
+
+### TC-7.4: Slack Test Bildirimi
+
+**Açıklama:** Slack'e test bildirimi gönderilebilmeli
+
+**Ön Koşul:** Slack webhook ayarlanmış olmalı
+
+**Adımlar:**
+1. Settings sayfasına git
+2. Slack bölümünde "Send Test" butonuna tıkla
+
+**Beklenen Sonuç:**
+- Slack kanalına test mesajı gelmeli
+- Toast mesajı "Test Sent" göstermeli
+
+---
+
+### TC-7.5: Custom Webhook Ayarları
+
+**Açıklama:** Custom webhook URL, secret ve event'ler ayarlanabilmeli
+
+**Adımlar:**
+1. Settings sayfasına git
+2. Custom Webhook bölümünü bul
+3. "Enabled" checkbox'ını işaretle
+4. URL'i gir
+5. İsteğe bağlı HMAC secret gir
+6. İstenen event'leri seç
+7. "Save" butonuna tıkla
+
+**Beklenen Sonuç:**
+- Ayarlar kaydedilmeli
+- Secret alanı "••••••••" olarak maskelenmeli
+
+---
+
+### TC-7.6: Build Tamamlandığında Otomatik Bildirim
+
+**Açıklama:** Build tamamlandığında yapılandırılmış kanallara bildirim gitmeli
+
+**Ön Koşul:**
+- En az bir notification channel yapılandırılmış
+- "BuildCompleted" event'i seçili
+
+**Adımlar:**
+1. Yeni bir build başlat
+2. Build'in tamamlanmasını bekle
+
+**Beklenen Sonuç:**
+- Yapılandırılmış kanallara bildirim gitmeli
+- Bildirim build numarası, proje adı, branch, süre bilgilerini içermeli
+
+---
+
+### TC-7.7: Build Başarısız Olduğunda Otomatik Bildirim
+
+**Açıklama:** Build başarısız olduğunda yapılandırılmış kanallara bildirim gitmeli
+
+**Ön Koşul:**
+- En az bir notification channel yapılandırılmış
+- "BuildFailed" event'i seçili
+
+**Adımlar:**
+1. Başarısız olacak bir build başlat (örn: geçersiz branch)
+2. Build'in başarısız olmasını bekle
+
+**Beklenen Sonuç:**
+- Yapılandırılmış kanallara hata bildirimi gitmeli
+- Bildirim hata mesajını içermeli
+
+---
+
+### TC-7.8: API - Notification Endpoints
+
+**Test Komutları:**
+```bash
+# Notification ayarlarını al
+curl -s http://localhost:5000/api/settings/notifications \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# Discord ayarlarını güncelle
+curl -s -X PUT http://localhost:5000/api/settings/notifications \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"discord":{"enabled":true,"webhookUrl":"https://discord.com/api/webhooks/...","events":["BuildCompleted","BuildFailed"]}}' | jq
+
+# Test bildirimi gönder
+curl -s -X POST http://localhost:5000/api/settings/notifications/test/Discord \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+---
+
 ## Phase 5: User Management
 
 ### TC-5.1: Users Sayfası Erişimi
