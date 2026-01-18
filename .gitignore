@@ -30,3 +30,5 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+src/BuildAgent/builds/
+src/BuildAgent/workspace/

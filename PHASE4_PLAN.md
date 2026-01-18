@@ -144,6 +144,13 @@ cd src/BuildAgent && dotnet run
 2. **SignalR Negotiation Warning** - Development'ta normal
 3. **Unity Path** - Platform'a göre değişiyor
 
+## Bekleyen Testler
+
+1. **Git Clone Testi** - Gerçek bir Git repo ile test edilmeli
+   - Public repo URL ile proje oluştur
+   - Build başlat
+   - Agent'ın `./workspace/` altına clone ettiğini doğrula
+
 ---
 
 ## Başlangıç Komutu
