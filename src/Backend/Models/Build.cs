@@ -38,9 +38,11 @@ public class Build
     public string? SteamBuildId { get; set; }
     public string? ErrorMessage { get; set; }
     public Guid? TriggeredById { get; set; }
+    public Guid? PipelineId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Project Project { get; set; } = null!;
     public User? TriggeredBy { get; set; }
+    public BuildPipeline? Pipeline { get; set; }
     public ICollection<BuildLog> Logs { get; set; } = new List<BuildLog>();
 }

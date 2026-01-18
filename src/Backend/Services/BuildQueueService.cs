@@ -82,7 +82,8 @@ public class BuildQueueService : BackgroundService
             ScriptingBackend = build.ScriptingBackend.ToString(),
             UnityVersion = build.Project.UnityVersion,
             BuildPath = build.Project.BuildPath,
-            GitUrl = build.Project.GitUrl
+            GitUrl = build.Project.GitUrl,
+            PipelineId = build.PipelineId
         }, stoppingToken);
     }
 
@@ -119,6 +120,17 @@ public class BuildQueueService : BackgroundService
         var uploadToSteam = template?.UploadToSteam ?? request.UploadToSteam;
         var steamBranch = request.SteamBranch ?? template?.SteamBranch;
 
+        // Validate pipeline if specified
+        BuildPipeline? pipeline = null;
+        if (request.PipelineId.HasValue)
+        {
+            pipeline = await context.BuildPipelines.FindAsync(request.PipelineId.Value);
+            if (pipeline == null)
+            {
+                throw new ArgumentException("Build pipeline not found");
+            }
+        }
+
         var build = new Build
         {
             Id = Guid.NewGuid(),
@@ -130,6 +142,7 @@ public class BuildQueueService : BackgroundService
             UploadToSteam = uploadToSteam,
             SteamBranch = steamBranch,
             TriggeredById = triggeredById,
+            PipelineId = request.PipelineId,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -162,6 +175,8 @@ public class BuildQueueService : BackgroundService
             build.SteamBuildId,
             build.ErrorMessage,
             triggeredBy?.Username,
+            build.PipelineId,
+            pipeline?.Name,
             build.CreatedAt
         );
     }

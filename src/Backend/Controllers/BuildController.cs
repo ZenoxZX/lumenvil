@@ -39,6 +39,7 @@ public class BuildController : ControllerBase
         var query = _context.Builds
             .Include(b => b.Project)
             .Include(b => b.TriggeredBy)
+            .Include(b => b.Pipeline)
             .AsQueryable();
 
         if (projectId.HasValue)
@@ -73,6 +74,8 @@ public class BuildController : ControllerBase
             b.SteamBuildId,
             b.ErrorMessage,
             b.TriggeredBy?.Username,
+            b.PipelineId,
+            b.Pipeline?.Name,
             b.CreatedAt
         ));
 
@@ -92,6 +95,7 @@ public class BuildController : ControllerBase
         var build = await _context.Builds
             .Include(b => b.Project)
             .Include(b => b.TriggeredBy)
+            .Include(b => b.Pipeline)
             .Include(b => b.Logs.OrderBy(l => l.Timestamp))
             .FirstOrDefaultAsync(b => b.Id == id);
 
@@ -120,6 +124,8 @@ public class BuildController : ControllerBase
             build.SteamBuildId,
             build.ErrorMessage,
             build.TriggeredBy?.Username,
+            build.PipelineId,
+            build.Pipeline?.Name,
             build.CreatedAt
         );
 

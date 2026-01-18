@@ -6,7 +6,8 @@ public record CreateBuildRequest(
     ScriptingBackend ScriptingBackend = ScriptingBackend.IL2CPP,
     bool UploadToSteam = false,
     string? SteamBranch = null,
-    Guid? TemplateId = null  // Optional: Create build from template
+    Guid? TemplateId = null,  // Optional: Create build from template
+    Guid? PipelineId = null   // Optional: Build pipeline to execute
 );
 
 public record BuildResponse(
@@ -29,6 +30,8 @@ public record BuildResponse(
     string? SteamBuildId,
     string? ErrorMessage,
     string? TriggeredByUsername,
+    Guid? PipelineId,
+    string? PipelineName,
     DateTime CreatedAt
 );
 
