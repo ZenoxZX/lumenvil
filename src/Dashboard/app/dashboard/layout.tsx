@@ -13,6 +13,7 @@ import {
   LogOut,
   Settings,
   Users,
+  FileCode,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BuildNotifications } from '@/components/BuildNotifications';
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Builds', href: '/dashboard/builds', icon: Hammer },
   { name: 'Projects', href: '/dashboard/projects', icon: FolderKanban },
+  { name: 'Templates', href: '/dashboard/templates', icon: FileCode },
   { name: 'Users', href: '/dashboard/users', icon: Users, adminOnly: true },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings, adminOnly: true },
 ];

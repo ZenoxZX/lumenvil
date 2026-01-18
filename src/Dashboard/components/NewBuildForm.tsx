@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Project, ScriptingBackend } from '@/types';
-import { getProjects, createBuild, getGitBranches, getSteamSettings, SteamSettings } from '@/lib/api';
+import { Project, ScriptingBackend, BuildTemplate } from '@/types';
+import { getProjects, createBuild, getGitBranches, getSteamSettings, SteamSettings, getBuildTemplates } from '@/lib/api';
 import { Checkbox } from '@/components/ui/checkbox';
 import { hasRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,8 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
   const [steamSettings, setSteamSettings] = useState<SteamSettings | null>(null);
   const [uploadToSteam, setUploadToSteam] = useState(false);
   const [steamBranch, setSteamBranch] = useState('default');
+  const [templates, setTemplates] = useState<BuildTemplate[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
   const canCreateBuild = mounted && hasRole('Developer');
   const selectedProjectData = projects.find((p) => p.id === selectedProject);
@@ -93,12 +95,42 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
           if (projectsData[0].gitUrl) {
             await loadBranches(projectsData[0].gitUrl);
           }
+          // Load templates for first project
+          try {
+            const templatesData = await getBuildTemplates(projectsData[0].id);
+            setTemplates(templatesData);
+            const defaultTemplate = templatesData.find((t) => t.isDefault);
+            if (defaultTemplate) {
+              setSelectedTemplate(defaultTemplate.id);
+              setScriptingBackend(defaultTemplate.scriptingBackend);
+              setUploadToSteam(defaultTemplate.uploadToSteam);
+              if (defaultTemplate.steamBranch) setSteamBranch(defaultTemplate.steamBranch);
+              if (defaultTemplate.branch) setBranch(defaultTemplate.branch);
+            }
+          } catch (error) {
+            console.error('Failed to load templates:', error);
+          }
         } else if (projectId) {
           const project = projectsData.find((p) => p.id === projectId);
           if (project) {
             setBranch(project.defaultBranch);
             if (project.gitUrl) {
               await loadBranches(project.gitUrl);
+            }
+            // Load templates for this project
+            try {
+              const templatesData = await getBuildTemplates(projectId);
+              setTemplates(templatesData);
+              const defaultTemplate = templatesData.find((t) => t.isDefault);
+              if (defaultTemplate) {
+                setSelectedTemplate(defaultTemplate.id);
+                setScriptingBackend(defaultTemplate.scriptingBackend);
+                setUploadToSteam(defaultTemplate.uploadToSteam);
+                if (defaultTemplate.steamBranch) setSteamBranch(defaultTemplate.steamBranch);
+                if (defaultTemplate.branch) setBranch(defaultTemplate.branch);
+              }
+            } catch (error) {
+              console.error('Failed to load templates:', error);
             }
           }
         }
@@ -111,6 +143,7 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
 
   const handleProjectChange = async (value: string) => {
     setSelectedProject(value);
+    setSelectedTemplate('');
     const project = projects.find((p) => p.id === value);
     if (project) {
       setBranch(project.defaultBranch);
@@ -118,6 +151,46 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
       if (project.gitUrl) {
         await loadBranches(project.gitUrl);
       }
+      // Load templates for this project
+      try {
+        const templatesData = await getBuildTemplates(value);
+        setTemplates(templatesData);
+        // Auto-select default template if exists
+        const defaultTemplate = templatesData.find((t) => t.isDefault);
+        if (defaultTemplate) {
+          applyTemplate(defaultTemplate);
+        }
+      } catch (error) {
+        console.error('Failed to load templates:', error);
+        setTemplates([]);
+      }
+    }
+  };
+
+  const applyTemplate = (template: BuildTemplate) => {
+    setSelectedTemplate(template.id);
+    if (template.branch) setBranch(template.branch);
+    setScriptingBackend(template.scriptingBackend);
+    setUploadToSteam(template.uploadToSteam);
+    if (template.steamBranch) setSteamBranch(template.steamBranch);
+  };
+
+  const handleTemplateChange = (value: string) => {
+    if (value === '__none__') {
+      setSelectedTemplate('');
+      // Reset to defaults
+      const project = projects.find((p) => p.id === selectedProject);
+      if (project) {
+        setBranch(project.defaultBranch);
+      }
+      setScriptingBackend('IL2CPP');
+      setUploadToSteam(false);
+      setSteamBranch(steamSettings?.defaultBranch || 'default');
+      return;
+    }
+    const template = templates.find((t) => t.id === value);
+    if (template) {
+      applyTemplate(template);
     }
   };
 
@@ -147,6 +220,7 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
         scriptingBackend,
         uploadToSteam: uploadToSteam && !!canUploadToSteam,
         steamBranch: uploadToSteam && !!canUploadToSteam ? steamBranch : undefined,
+        templateId: selectedTemplate || undefined,
       });
       toast({
         title: 'Build Started',
@@ -197,6 +271,28 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
               </SelectContent>
             </Select>
           </div>
+
+          {templates.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="template">Template (Optional)</Label>
+              <Select
+                value={selectedTemplate || '__none__'}
+                onValueChange={handleTemplateChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a template" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No template</SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} {template.isDefault && '(Default)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="branch">Branch</Label>
