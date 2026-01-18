@@ -106,6 +106,7 @@ public class BuildQueueService : BackgroundService
             Branch = request.Branch ?? project.DefaultBranch,
             ScriptingBackend = request.ScriptingBackend,
             Status = BuildStatus.Queued,
+            UploadToSteam = request.UploadToSteam,
             SteamBranch = request.SteamBranch,
             TriggeredById = triggeredById,
             CreatedAt = DateTime.UtcNow
@@ -134,8 +135,10 @@ public class BuildQueueService : BackgroundService
             build.CompletedAt,
             build.OutputPath,
             build.BuildSize,
+            build.UploadToSteam,
             build.SteamBranch,
             build.SteamUploadStatus,
+            build.SteamBuildId,
             build.ErrorMessage,
             triggeredBy?.Username,
             build.CreatedAt

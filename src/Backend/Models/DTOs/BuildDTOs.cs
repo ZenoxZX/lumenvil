@@ -4,6 +4,7 @@ public record CreateBuildRequest(
     Guid ProjectId,
     string? Branch,
     ScriptingBackend ScriptingBackend = ScriptingBackend.IL2CPP,
+    bool UploadToSteam = false,
     string? SteamBranch = null
 );
 
@@ -21,8 +22,10 @@ public record BuildResponse(
     DateTime? CompletedAt,
     string? OutputPath,
     long? BuildSize,
+    bool UploadToSteam,
     string? SteamBranch,
     string? SteamUploadStatus,
+    string? SteamBuildId,
     string? ErrorMessage,
     string? TriggeredByUsername,
     DateTime CreatedAt

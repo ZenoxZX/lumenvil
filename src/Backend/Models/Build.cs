@@ -32,8 +32,10 @@ public class Build
     public DateTime? CompletedAt { get; set; }
     public string? OutputPath { get; set; }
     public long? BuildSize { get; set; }
+    public bool UploadToSteam { get; set; }
     public string? SteamBranch { get; set; }
     public string? SteamUploadStatus { get; set; }
+    public string? SteamBuildId { get; set; }
     public string? ErrorMessage { get; set; }
     public Guid? TriggeredById { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -6,6 +6,8 @@ using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
 using Backend.Services;
+using Backend.Services.Platforms;
+using Backend.Services.Platforms.Steam;
 
 namespace Backend.Controllers;
 
@@ -16,11 +18,19 @@ public class BuildController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly BuildQueueService _buildQueueService;
+    private readonly SettingsService _settingsService;
+    private readonly ILogger<BuildController> _logger;
 
-    public BuildController(AppDbContext context, BuildQueueService buildQueueService)
+    public BuildController(
+        AppDbContext context,
+        BuildQueueService buildQueueService,
+        SettingsService settingsService,
+        ILogger<BuildController> logger)
     {
         _context = context;
         _buildQueueService = buildQueueService;
+        _settingsService = settingsService;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -57,8 +67,10 @@ public class BuildController : ControllerBase
             b.CompletedAt,
             b.OutputPath,
             b.BuildSize,
+            b.UploadToSteam,
             b.SteamBranch,
             b.SteamUploadStatus,
+            b.SteamBuildId,
             b.ErrorMessage,
             b.TriggeredBy?.Username,
             b.CreatedAt
@@ -102,8 +114,10 @@ public class BuildController : ControllerBase
             build.CompletedAt,
             build.OutputPath,
             build.BuildSize,
+            build.UploadToSteam,
             build.SteamBranch,
             build.SteamUploadStatus,
+            build.SteamBuildId,
             build.ErrorMessage,
             build.TriggeredBy?.Username,
             build.CreatedAt
@@ -195,5 +209,93 @@ public class BuildController : ControllerBase
             l.Message,
             l.Stage
         )));
+    }
+
+    [HttpPost("{id}/upload")]
+    [Authorize(Roles = "Admin,Developer")]
+    public async Task<IActionResult> TriggerUpload(Guid id)
+    {
+        var build = await _context.Builds
+            .Include(b => b.Project)
+            .FirstOrDefaultAsync(b => b.Id == id);
+
+        if (build == null)
+        {
+            return NotFound(new { message = "Build not found" });
+        }
+
+        if (build.Status != BuildStatus.Success)
+        {
+            return BadRequest(new { message = "Only successful builds can be uploaded" });
+        }
+
+        if (string.IsNullOrEmpty(build.OutputPath))
+        {
+            return BadRequest(new { message = "Build has no output path" });
+        }
+
+        var steamConfig = await _settingsService.GetSteamConfigAsync();
+        if (!steamConfig.IsConfigured)
+        {
+            return BadRequest(new { message = "Steam is not configured. Please configure Steam settings first." });
+        }
+
+        if (string.IsNullOrEmpty(build.Project.SteamAppId) || string.IsNullOrEmpty(build.Project.SteamDepotId))
+        {
+            return BadRequest(new { message = "Project does not have Steam AppId and DepotId configured" });
+        }
+
+        // Update status to uploading
+        build.SteamUploadStatus = "Uploading";
+        await _context.SaveChangesAsync();
+
+        try
+        {
+            var uploader = new SteamUploader(
+                HttpContext.RequestServices.GetRequiredService<ILogger<SteamUploader>>(),
+                steamConfig
+            );
+
+            var artifact = new BuildArtifact(
+                build.Id,
+                build.Project.Name,
+                build.BuildNumber,
+                build.OutputPath,
+                build.Project.SteamAppId,
+                build.Project.SteamDepotId,
+                build.SteamBranch
+            );
+
+            var result = await uploader.UploadAsync(artifact);
+
+            if (result.Success)
+            {
+                build.SteamUploadStatus = "Success";
+                build.SteamBuildId = result.BuildId;
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = "Upload completed successfully",
+                    buildId = result.BuildId,
+                    uploadedSize = result.UploadedSize
+                });
+            }
+            else
+            {
+                build.SteamUploadStatus = $"Failed: {result.Message}";
+                await _context.SaveChangesAsync();
+
+                return BadRequest(new { message = result.Message });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upload build {BuildId} to Steam", id);
+            build.SteamUploadStatus = $"Failed: {ex.Message}";
+            await _context.SaveChangesAsync();
+
+            return StatusCode(500, new { message = $"Upload failed: {ex.Message}" });
+        }
     }
 }
