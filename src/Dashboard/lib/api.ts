@@ -137,6 +137,12 @@ export async function cancelBuild(id: string): Promise<void> {
   });
 }
 
+export async function triggerBuildUpload(id: string): Promise<{ message: string; buildId?: string }> {
+  return fetchApi<{ message: string; buildId?: string }>(`/build/${id}/upload`, {
+    method: 'POST',
+  });
+}
+
 // Git
 export interface GitBranchesResponse {
   branches: string[];
@@ -179,4 +185,47 @@ export async function deleteUser(id: string): Promise<void> {
   return fetchApi<void>(`/user/${id}`, {
     method: 'DELETE',
   });
+}
+
+// Settings
+export interface SteamSettings {
+  username: string | null;
+  hasPassword: boolean;
+  steamCmdPath: string | null;
+  defaultBranch: string | null;
+  isConfigured: boolean;
+}
+
+export interface UpdateSteamSettingsRequest {
+  username: string | null;
+  password: string | null;
+  steamCmdPath: string | null;
+  defaultBranch: string | null;
+}
+
+export interface PlatformInfo {
+  type: string;
+  name: string;
+  isImplemented: boolean;
+}
+
+export async function getSteamSettings(): Promise<SteamSettings> {
+  return fetchApi<SteamSettings>('/settings/steam');
+}
+
+export async function updateSteamSettings(data: UpdateSteamSettingsRequest): Promise<SteamSettings> {
+  return fetchApi<SteamSettings>('/settings/steam', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function testSteamConnection(): Promise<{ message: string }> {
+  return fetchApi<{ message: string }>('/settings/steam/test', {
+    method: 'POST',
+  });
+}
+
+export async function getPlatforms(): Promise<PlatformInfo[]> {
+  return fetchApi<PlatformInfo[]>('/settings/platforms');
 }

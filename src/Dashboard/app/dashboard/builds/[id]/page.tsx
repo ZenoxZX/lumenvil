@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BuildDetail, BuildLog, BuildStatus } from '@/types';
-import { getBuild, cancelBuild } from '@/lib/api';
+import { getBuild, cancelBuild, triggerBuildUpload } from '@/lib/api';
+import { hasRole } from '@/lib/auth';
 import { formatDate, formatSize } from '@/lib/utils';
 import { BuildProgressBar } from '@/components/BuildProgressBar';
 import { BuildLogViewer } from '@/components/BuildLogViewer';
@@ -25,7 +26,7 @@ import {
   useBuildProgress,
   BuildProgressEvent,
 } from '@/lib/useSignalR';
-import { ArrowLeft, XCircle, Clock } from 'lucide-react';
+import { ArrowLeft, XCircle, Clock, Upload, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 function LiveDuration({ startedAt, completedAt }: { startedAt?: string; completedAt?: string }) {
   const [elapsed, setElapsed] = useState('');
@@ -75,9 +76,13 @@ export default function BuildDetailPage() {
   const [buildDetail, setBuildDetail] = useState<BuildDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [logs, setLogs] = useState<BuildLog[]>([]);
   const [status, setStatus] = useState<BuildStatus | null>(null);
   const [progress, setProgress] = useState<BuildProgressEvent | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  const canTriggerUpload = mounted && hasRole('Developer');
 
   const buildId = params.id as string;
 
@@ -131,6 +136,7 @@ export default function BuildDetailPage() {
   }, [buildId]);
 
   useEffect(() => {
+    setMounted(true);
     const fetchBuild = async () => {
       try {
         const data = await getBuild(buildId);
@@ -171,6 +177,28 @@ export default function BuildDetailPage() {
       });
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleUpload = async () => {
+    setUploading(true);
+    try {
+      const result = await triggerBuildUpload(buildId);
+      toast({
+        title: 'Upload Started',
+        description: result.message,
+      });
+      // Refresh build data
+      const data = await getBuild(buildId);
+      setBuildDetail(data);
+    } catch (error) {
+      toast({
+        title: 'Upload Failed',
+        description: error instanceof Error ? error.message : 'Failed to upload to Steam',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -331,6 +359,72 @@ export default function BuildDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Steam Upload Status */}
+      {(build.uploadToSteam || build.steamUploadStatus) && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Steam Upload</CardTitle>
+              {currentStatus === 'Success' && canTriggerUpload && !build.steamUploadStatus?.startsWith('Success') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUpload}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload to Steam
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Upload Status</p>
+                <div className="flex items-center gap-2 mt-1">
+                  {build.steamUploadStatus?.startsWith('Success') ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : build.steamUploadStatus?.startsWith('Failed') ? (
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                  ) : build.steamUploadStatus === 'Uploading' ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  ) : null}
+                  <span className="font-medium">
+                    {build.steamUploadStatus || (build.uploadToSteam ? 'Pending' : 'Not requested')}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Steam Branch</p>
+                <p className="font-medium">{build.steamBranch || 'default'}</p>
+              </div>
+              {build.steamBuildId && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Steam Build ID</p>
+                  <p className="font-medium font-mono">{build.steamBuildId}</p>
+                </div>
+              )}
+            </div>
+
+            {build.steamUploadStatus?.startsWith('Failed') && (
+              <div className="mt-4 p-4 bg-destructive/10 border border-destructive rounded-lg">
+                <p className="text-sm text-destructive">{build.steamUploadStatus}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Build Logs */}
       <Card>

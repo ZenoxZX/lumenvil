@@ -60,8 +60,10 @@ export interface Build {
   completedAt?: string;
   outputPath?: string;
   buildSize?: number;
+  uploadToSteam: boolean;
   steamBranch?: string;
   steamUploadStatus?: string;
+  steamBuildId?: string;
   errorMessage?: string;
   triggeredByUsername?: string;
   createdAt: string;
@@ -92,6 +94,7 @@ export interface CreateBuildRequest {
   projectId: string;
   branch?: string;
   scriptingBackend: ScriptingBackend;
+  uploadToSteam?: boolean;
   steamBranch?: string;
 }
 

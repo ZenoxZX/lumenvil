@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Project, ScriptingBackend } from '@/types';
-import { getProjects, createBuild, getGitBranches } from '@/lib/api';
+import { getProjects, createBuild, getGitBranches, getSteamSettings, SteamSettings } from '@/lib/api';
+import { Checkbox } from '@/components/ui/checkbox';
 import { hasRole } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -42,8 +43,15 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
   const [scriptingBackend, setScriptingBackend] = useState<ScriptingBackend>('IL2CPP');
   const [submitting, setSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [steamSettings, setSteamSettings] = useState<SteamSettings | null>(null);
+  const [uploadToSteam, setUploadToSteam] = useState(false);
+  const [steamBranch, setSteamBranch] = useState('default');
 
   const canCreateBuild = mounted && hasRole('Developer');
+  const selectedProjectData = projects.find((p) => p.id === selectedProject);
+  const canUploadToSteam = steamSettings?.isConfigured &&
+    selectedProjectData?.steamAppId &&
+    selectedProjectData?.steamDepotId;
 
   const loadBranches = async (gitUrl: string) => {
     if (!gitUrl) {
@@ -65,18 +73,28 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
 
   useEffect(() => {
     setMounted(true);
-    const fetchProjects = async () => {
+    const fetchData = async () => {
       try {
-        const data = await getProjects();
-        setProjects(data.filter((p) => p.isActive));
-        if (!projectId && data.length > 0) {
-          setSelectedProject(data[0].id);
-          setBranch(data[0].defaultBranch);
-          if (data[0].gitUrl) {
-            await loadBranches(data[0].gitUrl);
+        const [projectsData, steamData] = await Promise.all([
+          getProjects(),
+          getSteamSettings().catch(() => null),
+        ]);
+
+        setProjects(projectsData.filter((p) => p.isActive));
+        setSteamSettings(steamData);
+
+        if (steamData?.defaultBranch) {
+          setSteamBranch(steamData.defaultBranch);
+        }
+
+        if (!projectId && projectsData.length > 0) {
+          setSelectedProject(projectsData[0].id);
+          setBranch(projectsData[0].defaultBranch);
+          if (projectsData[0].gitUrl) {
+            await loadBranches(projectsData[0].gitUrl);
           }
         } else if (projectId) {
-          const project = data.find((p) => p.id === projectId);
+          const project = projectsData.find((p) => p.id === projectId);
           if (project) {
             setBranch(project.defaultBranch);
             if (project.gitUrl) {
@@ -85,10 +103,10 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
           }
         }
       } catch (error) {
-        console.error('Failed to fetch projects:', error);
+        console.error('Failed to fetch data:', error);
       }
     };
-    fetchProjects();
+    fetchData();
   }, [projectId]);
 
   const handleProjectChange = async (value: string) => {
@@ -127,10 +145,12 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
         projectId: selectedProject,
         branch: branch || undefined,
         scriptingBackend,
+        uploadToSteam: uploadToSteam && !!canUploadToSteam,
+        steamBranch: uploadToSteam && !!canUploadToSteam ? steamBranch : undefined,
       });
       toast({
         title: 'Build Started',
-        description: `Build #${build.buildNumber} has been queued`,
+        description: `Build #${build.buildNumber} has been queued${uploadToSteam ? ' (will upload to Steam)' : ''}`,
       });
       onBuildCreated?.();
       router.push(`/dashboard/builds/${build.id}`);
@@ -232,6 +252,47 @@ export function NewBuildForm({ projectId, onBuildCreated }: NewBuildFormProps) {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Steam Upload Section */}
+          {steamSettings?.isConfigured && (
+            <div className="space-y-3 pt-2 border-t">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="uploadToSteam"
+                  checked={uploadToSteam}
+                  onCheckedChange={(checked) => setUploadToSteam(checked === true)}
+                  disabled={!canUploadToSteam}
+                />
+                <Label
+                  htmlFor="uploadToSteam"
+                  className={!canUploadToSteam ? 'text-muted-foreground' : ''}
+                >
+                  Upload to Steam after build
+                </Label>
+              </div>
+
+              {!canUploadToSteam && selectedProjectData && (
+                <p className="text-xs text-muted-foreground">
+                  Project needs Steam AppId and DepotId configured to enable upload
+                </p>
+              )}
+
+              {uploadToSteam && canUploadToSteam && (
+                <div className="space-y-2 pl-6">
+                  <Label htmlFor="steamBranch">Steam Branch</Label>
+                  <Input
+                    id="steamBranch"
+                    value={steamBranch}
+                    onChange={(e) => setSteamBranch(e.target.value)}
+                    placeholder="default"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Steam branch to publish to (e.g., default, beta, staging)
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
         <CardFooter>
           <Button type="submit" disabled={submitting || !selectedProject}>

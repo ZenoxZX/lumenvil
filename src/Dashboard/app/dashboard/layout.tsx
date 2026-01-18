@@ -23,6 +23,7 @@ const navigation = [
   { name: 'Builds', href: '/dashboard/builds', icon: Hammer },
   { name: 'Projects', href: '/dashboard/projects', icon: FolderKanban },
   { name: 'Users', href: '/dashboard/users', icon: Users, adminOnly: true },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings, adminOnly: true },
 ];
 
 export default function DashboardLayout({
