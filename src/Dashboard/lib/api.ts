@@ -10,6 +10,12 @@ import {
   User,
   CreateUserRequest,
   UpdateRoleRequest,
+  BuildTemplate,
+  CreateBuildTemplateRequest,
+  UpdateBuildTemplateRequest,
+  CleanupSettings,
+  DiskSpaceInfo,
+  CleanupResult,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -310,4 +316,56 @@ export async function testNotificationChannel(
   return fetchApi<{ message: string }>(`/settings/notifications/test/${channel}`, {
     method: 'POST',
   });
+}
+
+// Build Templates
+export async function getBuildTemplates(projectId?: string): Promise<BuildTemplate[]> {
+  const params = projectId ? `?projectId=${projectId}` : '';
+  return fetchApi<BuildTemplate[]>(`/buildtemplate${params}`);
+}
+
+export async function getBuildTemplate(id: string): Promise<BuildTemplate> {
+  return fetchApi<BuildTemplate>(`/buildtemplate/${id}`);
+}
+
+export async function createBuildTemplate(data: CreateBuildTemplateRequest): Promise<BuildTemplate> {
+  return fetchApi<BuildTemplate>('/buildtemplate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateBuildTemplate(id: string, data: UpdateBuildTemplateRequest): Promise<BuildTemplate> {
+  return fetchApi<BuildTemplate>(`/buildtemplate/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteBuildTemplate(id: string): Promise<void> {
+  return fetchApi<void>(`/buildtemplate/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// Cleanup Settings
+export async function getCleanupSettings(): Promise<CleanupSettings> {
+  return fetchApi<CleanupSettings>('/settings/cleanup');
+}
+
+export async function updateCleanupSettings(data: CleanupSettings): Promise<CleanupSettings> {
+  return fetchApi<CleanupSettings>('/settings/cleanup', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function runCleanup(): Promise<CleanupResult> {
+  return fetchApi<CleanupResult>('/settings/cleanup/run', {
+    method: 'POST',
+  });
+}
+
+export async function getDiskSpace(): Promise<DiskSpaceInfo> {
+  return fetchApi<DiskSpaceInfo>('/settings/disk');
 }

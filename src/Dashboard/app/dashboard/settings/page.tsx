@@ -10,12 +10,17 @@ import {
   getNotificationSettings,
   updateNotificationSettings,
   testNotificationChannel,
+  getCleanupSettings,
+  updateCleanupSettings,
+  runCleanup,
+  getDiskSpace,
   SteamSettings,
   PlatformInfo,
   NotificationSettings,
   NotificationEvent,
   NotificationChannel,
 } from '@/lib/api';
+import { CleanupSettings, DiskSpaceInfo, CleanupResult, BuildStatus } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +45,9 @@ import {
   Bell,
   MessageSquare,
   Webhook,
+  Trash2,
+  HardDrive,
+  Play,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -81,6 +89,28 @@ export default function SettingsPage() {
     events: [] as NotificationEvent[],
   });
 
+  // Cleanup state
+  const [cleanupSettings, setCleanupSettings] = useState<CleanupSettings | null>(null);
+  const [diskSpace, setDiskSpace] = useState<DiskSpaceInfo | null>(null);
+  const [savingCleanup, setSavingCleanup] = useState(false);
+  const [runningCleanup, setRunningCleanup] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null);
+  const [cleanupForm, setCleanupForm] = useState({
+    enabled: false,
+    maxBuildsPerProject: 10,
+    maxBuildAgeDays: 30,
+    minFreeDiskSpaceGB: 50,
+    cleanupStatuses: ['Success', 'Failed', 'Cancelled'] as BuildStatus[],
+    scheduledHour: 3,
+    keepSteamUploads: true,
+  });
+
+  const allCleanupStatuses: { value: BuildStatus; label: string }[] = [
+    { value: 'Success', label: 'Successful' },
+    { value: 'Failed', label: 'Failed' },
+    { value: 'Cancelled', label: 'Cancelled' },
+  ];
+
   const allEvents: { value: NotificationEvent; label: string }[] = [
     { value: 'BuildStarted', label: 'Build Started' },
     { value: 'BuildCompleted', label: 'Build Completed' },
@@ -99,14 +129,17 @@ export default function SettingsPage() {
 
   const fetchData = async () => {
     try {
-      const [steamData, platformsData, notificationsData] = await Promise.all([
+      const [steamData, platformsData, notificationsData, cleanupData, diskData] = await Promise.all([
         getSteamSettings(),
         getPlatforms(),
         getNotificationSettings().catch(() => null),
+        getCleanupSettings().catch(() => null),
+        getDiskSpace().catch(() => null),
       ]);
 
       setSteamSettings(steamData);
       setPlatforms(platformsData);
+      setDiskSpace(diskData);
 
       setSteamForm({
         username: steamData.username || '',
@@ -132,6 +165,19 @@ export default function SettingsPage() {
           url: notificationsData.webhook.url || '',
           secret: '',
           events: notificationsData.webhook.events,
+        });
+      }
+
+      if (cleanupData) {
+        setCleanupSettings(cleanupData);
+        setCleanupForm({
+          enabled: cleanupData.enabled,
+          maxBuildsPerProject: cleanupData.maxBuildsPerProject,
+          maxBuildAgeDays: cleanupData.maxBuildAgeDays,
+          minFreeDiskSpaceGB: cleanupData.minFreeDiskSpaceGB,
+          cleanupStatuses: cleanupData.cleanupStatuses,
+          scheduledHour: cleanupData.scheduledHour,
+          keepSteamUploads: cleanupData.keepSteamUploads,
         });
       }
     } catch (error) {
@@ -281,6 +327,59 @@ export default function SettingsPage() {
       ? webhookForm.events.filter((e) => e !== event)
       : [...webhookForm.events, event];
     setWebhookForm({ ...webhookForm, events });
+  };
+
+  const toggleCleanupStatus = (status: BuildStatus) => {
+    const statuses = cleanupForm.cleanupStatuses.includes(status)
+      ? cleanupForm.cleanupStatuses.filter((s) => s !== status)
+      : [...cleanupForm.cleanupStatuses, status];
+    setCleanupForm({ ...cleanupForm, cleanupStatuses: statuses });
+  };
+
+  const handleSaveCleanup = async () => {
+    setSavingCleanup(true);
+    try {
+      const updated = await updateCleanupSettings(cleanupForm);
+      setCleanupSettings(updated);
+      toast({
+        title: 'Settings Saved',
+        description: 'Cleanup settings have been updated',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to save cleanup settings',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingCleanup(false);
+    }
+  };
+
+  const handleRunCleanup = async () => {
+    setRunningCleanup(true);
+    setCleanupResult(null);
+    try {
+      const result = await runCleanup();
+      setCleanupResult(result);
+      // Refresh disk space
+      const newDiskSpace = await getDiskSpace().catch(() => null);
+      if (newDiskSpace) setDiskSpace(newDiskSpace);
+
+      toast({
+        title: 'Cleanup Complete',
+        description: `Deleted ${result.buildsDeleted} builds, freed ${result.spaceFreedFormatted}`,
+        className: result.errors.length > 0 ? '' : 'border-green-500 bg-green-500/10',
+      });
+    } catch (error) {
+      toast({
+        title: 'Cleanup Failed',
+        description: error instanceof Error ? error.message : 'Failed to run cleanup',
+        variant: 'destructive',
+      });
+    } finally {
+      setRunningCleanup(false);
+    }
   };
 
   if (!mounted) {
@@ -793,6 +892,266 @@ export default function SettingsPage() {
           </Button>
         </CardFooter>
       </Card>
+
+      {/* Build Cleanup Section Header */}
+      <div className="pt-4">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Trash2 className="h-6 w-6" />
+          Build Cleanup
+        </h2>
+        <p className="text-muted-foreground">Automatic cleanup of old build files</p>
+      </div>
+
+      {/* Disk Space Info */}
+      {diskSpace && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <HardDrive className="h-5 w-5" />
+              <div>
+                <CardTitle>Disk Space</CardTitle>
+                <CardDescription>{diskSpace.drivePath}</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between text-sm">
+                <span>Used: {diskSpace.usedFormatted}</span>
+                <span>Free: {diskSpace.freeFormatted}</span>
+                <span>Total: {diskSpace.totalFormatted}</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-4 overflow-hidden">
+                <div
+                  className={`h-full transition-all ${
+                    diskSpace.usedPercentage > 90
+                      ? 'bg-red-500'
+                      : diskSpace.usedPercentage > 75
+                      ? 'bg-yellow-500'
+                      : 'bg-green-500'
+                  }`}
+                  style={{ width: `${diskSpace.usedPercentage}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                {diskSpace.usedPercentage.toFixed(1)}% used
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cleanup Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Cleanup Settings</CardTitle>
+              <CardDescription>Configure automatic build cleanup rules</CardDescription>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="cleanup-enabled"
+                checked={cleanupForm.enabled}
+                onCheckedChange={(checked) =>
+                  setCleanupForm({ ...cleanupForm, enabled: checked === true })
+                }
+              />
+              <Label htmlFor="cleanup-enabled">Enabled</Label>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="max-builds">Max Builds Per Project</Label>
+              <Input
+                id="max-builds"
+                type="number"
+                min="0"
+                value={cleanupForm.maxBuildsPerProject}
+                onChange={(e) =>
+                  setCleanupForm({ ...cleanupForm, maxBuildsPerProject: parseInt(e.target.value) || 0 })
+                }
+                disabled={!cleanupForm.enabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Keep only the latest N builds per project (0 = unlimited)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="max-age">Max Build Age (Days)</Label>
+              <Input
+                id="max-age"
+                type="number"
+                min="0"
+                value={cleanupForm.maxBuildAgeDays}
+                onChange={(e) =>
+                  setCleanupForm({ ...cleanupForm, maxBuildAgeDays: parseInt(e.target.value) || 0 })
+                }
+                disabled={!cleanupForm.enabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Delete builds older than N days (0 = unlimited)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="min-disk">Min Free Disk Space (GB)</Label>
+              <Input
+                id="min-disk"
+                type="number"
+                min="1"
+                value={cleanupForm.minFreeDiskSpaceGB}
+                onChange={(e) =>
+                  setCleanupForm({ ...cleanupForm, minFreeDiskSpaceGB: parseInt(e.target.value) || 1 })
+                }
+                disabled={!cleanupForm.enabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Emergency cleanup triggers when free space drops below this
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="scheduled-hour">Scheduled Hour (0-23)</Label>
+              <Input
+                id="scheduled-hour"
+                type="number"
+                min="0"
+                max="23"
+                value={cleanupForm.scheduledHour}
+                onChange={(e) =>
+                  setCleanupForm({ ...cleanupForm, scheduledHour: parseInt(e.target.value) || 0 })
+                }
+                disabled={!cleanupForm.enabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Run daily cleanup at this hour (local time)
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Build Statuses to Clean Up</Label>
+            <div className="flex flex-wrap gap-4">
+              {allCleanupStatuses.map((status) => (
+                <div key={status.value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`cleanup-status-${status.value}`}
+                    checked={cleanupForm.cleanupStatuses.includes(status.value)}
+                    onCheckedChange={() => toggleCleanupStatus(status.value)}
+                    disabled={!cleanupForm.enabled}
+                  />
+                  <Label
+                    htmlFor={`cleanup-status-${status.value}`}
+                    className={!cleanupForm.enabled ? 'text-muted-foreground' : ''}
+                  >
+                    {status.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="keep-steam"
+              checked={cleanupForm.keepSteamUploads}
+              onCheckedChange={(checked) =>
+                setCleanupForm({ ...cleanupForm, keepSteamUploads: checked === true })
+              }
+              disabled={!cleanupForm.enabled}
+            />
+            <Label
+              htmlFor="keep-steam"
+              className={!cleanupForm.enabled ? 'text-muted-foreground' : ''}
+            >
+              Keep builds that were uploaded to Steam
+            </Label>
+          </div>
+        </CardContent>
+        <CardFooter className="flex justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleRunCleanup}
+            disabled={runningCleanup}
+          >
+            {runningCleanup ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Running...
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Run Cleanup Now
+              </>
+            )}
+          </Button>
+          <Button onClick={handleSaveCleanup} disabled={savingCleanup}>
+            {savingCleanup ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save Settings
+              </>
+            )}
+          </Button>
+        </CardFooter>
+      </Card>
+
+      {/* Cleanup Result */}
+      {cleanupResult && (
+        <Card className={cleanupResult.errors.length > 0 ? 'border-yellow-500/50' : 'border-green-500/50'}>
+          <CardHeader>
+            <CardTitle>Last Cleanup Result</CardTitle>
+            <CardDescription>
+              {new Date(cleanupResult.executedAt).toLocaleString()}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Builds Deleted</p>
+                <p className="text-2xl font-bold">{cleanupResult.buildsDeleted}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Space Freed</p>
+                <p className="text-2xl font-bold">{cleanupResult.spaceFreedFormatted}</p>
+              </div>
+            </div>
+
+            {cleanupResult.deletedBuilds.length > 0 && (
+              <div>
+                <p className="text-sm font-medium mb-2">Deleted Builds:</p>
+                <ul className="text-sm text-muted-foreground max-h-32 overflow-y-auto">
+                  {cleanupResult.deletedBuilds.map((build, i) => (
+                    <li key={i}>{build}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {cleanupResult.errors.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-red-500 mb-2">Errors:</p>
+                <ul className="text-sm text-red-500 max-h-32 overflow-y-auto">
+                  {cleanupResult.errors.map((error, i) => (
+                    <li key={i}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
